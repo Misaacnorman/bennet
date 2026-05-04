@@ -1,11 +1,18 @@
-# Builds Flutter web and deploys to Firebase Hosting on push to main.
+# Builds Flutter web and deploys to Firebase Hosting + Firestore on push to main.
 #
-# Not "Firebase App Hosting" (that is a separate Firebase product with its own
-# GitHub integration). This workflow uses classic Firebase Hosting + GitHub Actions.
+# Two jobs so Hosting still succeeds if Firestore deploy fails (e.g. IAM).
 #
-# Required repo secrets (Settings → Secrets and variables → Actions):
-#   FIREBASE_SERVICE_ACCOUNT — full JSON of a GCP service account with rights to
-#     deploy Hosting and Firestore rules (Firebase Console → Project settings → Service accounts).
+# Secret: FIREBASE_SERVICE_ACCOUNT — full JSON of a GCP service account key.
+#
+# IAM (Google Cloud Console → IAM → grant these to that service account principal):
+#   • roles/serviceusage.serviceUsageViewer — avoids 403 on serviceusage.googleapis.com
+#     ("Permission denied to get service [firestore.googleapis.com]")
+#   • roles/datastore.owner — deploy Firestore rules & indexes (or narrower rules-only roles)
+#   • Hosting deploy via FirebaseExtended/action-hosting-deploy usually works with the default
+#     firebase-adminsdk-* account; if not, add roles/firebasehosting.admin
+#
+# Quick fix for a solo project: Project → IAM → grant **Editor** (roles/editor) to the
+# firebase-adminsdk-* email (treat the JSON like a password; prefer least-privilege above).
 
 name: Deploy web to Firebase Hosting
 
@@ -14,23 +21,12 @@ on:
     branches: [main]
 
 jobs:
-  deploy:
+  deploy-hosting:
     runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
       - uses: actions/checkout@v4
-
-      # Hosting-only deploys used to skip Firestore → new DBs keep default deny-all rules.
-      - name: Deploy Firestore rules & indexes
-        env:
-          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-        run: |
-          echo "$FIREBASE_SERVICE_ACCOUNT" > "${RUNNER_TEMP}/firebase-sa.json"
-          export GOOGLE_APPLICATION_CREDENTIALS="${RUNNER_TEMP}/firebase-sa.json"
-          export CI=true
-          npm install -g firebase-tools
-          firebase deploy --only firestore --non-interactive
 
       - uses: subosito/flutter-action@v2
         with:
@@ -46,3 +42,20 @@ jobs:
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           channelId: live
           entryPoint: .
+
+  deploy-firestore:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy Firestore rules & indexes
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          printf '%s\n' "$FIREBASE_SERVICE_ACCOUNT" > "${RUNNER_TEMP}/firebase-sa.json"
+          export GOOGLE_APPLICATION_CREDENTIALS="${RUNNER_TEMP}/firebase-sa.json"
+          export CI=true
+          npm install -g firebase-tools
+          firebase deploy --only firestore --non-interactive
