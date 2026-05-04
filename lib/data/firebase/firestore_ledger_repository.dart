@@ -335,23 +335,28 @@ class FirestoreLedgerRepository implements LedgerRepository {
     int year,
     int month,
   ) async {
-    final snap = await _periodOpenings
-        .where(
-          FieldPath.documentId,
-          isLessThanOrEqualTo: _periodKey(year, month),
-        )
-        .orderBy(FieldPath.documentId, descending: true)
-        .limit(1)
-        .get();
-    if (snap.docs.isEmpty) return null;
-
-    final data = snap.docs.first.data();
-    final openingYear = data['year'] as int;
-    final openingMonth = data['month'] as int;
-    return (
-      monthStart: DateTime(openingYear, openingMonth),
-      openingMinor: (data['openingMinor'] as num).toInt(),
-    );
+    var y = year;
+    var m = month;
+    // Firestore rejects compound queries on __name__ without a composite index; point reads avoid that.
+    const maxSteps = 2400;
+    for (var step = 0; step < maxSteps; step++) {
+      final doc = await _periodOpenings.doc(_periodKey(y, m)).get();
+      if (doc.exists) {
+        final data = doc.data()!;
+        return (
+          monthStart: DateTime(data['year'] as int, data['month'] as int),
+          openingMinor: (data['openingMinor'] as num).toInt(),
+        );
+      }
+      if (m == 1) {
+        y--;
+        m = 12;
+        if (y < 1970) break;
+      } else {
+        m--;
+      }
+    }
+    return null;
   }
 
   Future<int> _netTransactionsBefore(DateTime to, {DateTime? from}) async {
