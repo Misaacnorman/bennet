@@ -4,17 +4,18 @@ import 'package:go_router/go_router.dart';
 
 import '../widgets/auth_shell.dart';
 
-/// Email/password sign-in for Firebase-backed Bennet.
-class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+/// Email/password registration for Firebase-backed Bennet.
+class SignupScreen extends StatefulWidget {
+  const SignupScreen({super.key});
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  State<SignupScreen> createState() => _SignupScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _SignupScreenState extends State<SignupScreen> {
   final _emailCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
+  final _confirmCtrl = TextEditingController();
   bool _busy = false;
   String? _error;
 
@@ -22,19 +23,30 @@ class _LoginScreenState extends State<LoginScreen> {
   void dispose() {
     _emailCtrl.dispose();
     _passwordCtrl.dispose();
+    _confirmCtrl.dispose();
     super.dispose();
   }
 
-  Future<void> _signIn() async {
+  Future<void> _submit() async {
+    final email = _emailCtrl.text.trim();
+    final password = _passwordCtrl.text;
+    final confirm = _confirmCtrl.text;
+
+    if (password != confirm) {
+      setState(() => _error = 'Passwords do not match.');
+      return;
+    }
+    if (password.length < 6) {
+      setState(() => _error = 'Password must be at least 6 characters.');
+      return;
+    }
+
     setState(() {
       _busy = true;
       _error = null;
     });
     try {
-      await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: _emailCtrl.text.trim(),
-        password: _passwordCtrl.text,
-      );
+      await FirebaseAuth.instance.createUserWithEmailAndPassword(email: email, password: password);
       if (mounted) context.go('/');
     } on FirebaseAuthException catch (e) {
       setState(() => _error = e.message ?? e.code);
@@ -50,8 +62,8 @@ class _LoginScreenState extends State<LoginScreen> {
     final scheme = Theme.of(context).colorScheme;
 
     return AuthShell(
-      headline: 'Welcome back',
-      subtitle: 'Sign in to continue',
+      headline: 'Create account',
+      subtitle: 'Set up your Bennet workspace',
       formCard: AuthShell.card(
         context,
         children: [
@@ -66,12 +78,23 @@ class _LoginScreenState extends State<LoginScreen> {
           const SizedBox(height: 16),
           TextField(
             controller: _passwordCtrl,
-            decoration: const InputDecoration(labelText: 'Password'),
+            decoration: const InputDecoration(
+              labelText: 'Password',
+              helperText: 'At least 6 characters',
+            ),
+            obscureText: true,
+            textInputAction: TextInputAction.next,
+            autofillHints: const [AutofillHints.newPassword],
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _confirmCtrl,
+            decoration: const InputDecoration(labelText: 'Confirm password'),
             obscureText: true,
             textInputAction: TextInputAction.done,
-            autofillHints: const [AutofillHints.password],
+            autofillHints: const [AutofillHints.newPassword],
             onSubmitted: (_) {
-              if (!_busy) _signIn();
+              if (!_busy) _submit();
             },
           ),
           if (_error != null) ...[
@@ -80,8 +103,8 @@ class _LoginScreenState extends State<LoginScreen> {
           ],
           const SizedBox(height: 24),
           FilledButton(
-            onPressed: _busy ? null : _signIn,
-            child: const Text('Sign in'),
+            onPressed: _busy ? null : _submit,
+            child: const Text('Create account'),
           ),
           if (_busy)
             const Padding(
@@ -95,12 +118,12 @@ class _LoginScreenState extends State<LoginScreen> {
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
           Text(
-            'New to Bennet? ',
+            'Already have an account? ',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
           ),
           TextButton(
-            onPressed: _busy ? null : () => context.go('/signup'),
-            child: const Text('Create an account'),
+            onPressed: _busy ? null : () => context.go('/login'),
+            child: const Text('Sign in'),
           ),
         ],
       ),

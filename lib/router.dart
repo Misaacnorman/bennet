@@ -7,6 +7,7 @@ import 'presentation/screens/balance_sheet_screen.dart';
 import 'presentation/screens/cash_book_screen.dart';
 import 'presentation/screens/dashboard_screen.dart';
 import 'presentation/screens/login_screen.dart';
+import 'presentation/screens/signup_screen.dart';
 import 'presentation/screens/monthly_summary_screen.dart';
 import 'presentation/screens/reconciliation_screen.dart';
 import 'presentation/screens/settings_screen.dart';
@@ -31,13 +32,15 @@ final goRouterProvider = Provider<GoRouter>((ref) {
     refreshListenable: refresh,
     redirect: (context, state) {
       final loggedIn = FirebaseAuth.instance.currentUser != null;
-      final loggingIn = state.matchedLocation == '/login';
-      if (!loggedIn && !loggingIn) return '/login';
-      if (loggedIn && loggingIn) return '/';
+      final onAuthPage =
+          state.matchedLocation == '/login' || state.matchedLocation == '/signup';
+      if (!loggedIn && !onAuthPage) return '/login';
+      if (loggedIn && onAuthPage) return '/';
       return null;
     },
     routes: [
       GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
+      GoRoute(path: '/signup', builder: (context, state) => const SignupScreen()),
       GoRoute(path: '/', builder: (context, state) => const DashboardScreen()),
       GoRoute(path: '/transactions', builder: (context, state) => const TransactionListScreen()),
       GoRoute(path: '/transactions/new', builder: (context, state) => const TransactionEditScreen()),
