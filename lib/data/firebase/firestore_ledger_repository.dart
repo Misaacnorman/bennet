@@ -10,9 +10,9 @@ class FirestoreLedgerRepository implements LedgerRepository {
     required String uid,
     FirebaseFirestore? firestore,
     int defaultBookId = 1,
-  })  : _uid = uid,
-        _db = firestore ?? FirebaseFirestore.instance,
-        _defaultBookId = defaultBookId;
+  }) : _uid = uid,
+       _db = firestore ?? FirebaseFirestore.instance,
+       _defaultBookId = defaultBookId;
 
   final String _uid;
   final FirebaseFirestore _db;
@@ -111,11 +111,19 @@ class FirestoreLedgerRepository implements LedgerRepository {
   Future<List<Category>> listCategories() async {
     await ensureBootstrap();
     final snap = await _categories.get();
-    final list = snap.docs
-        .map((d) => Category(id: int.parse(d.id), name: d.data()['name'] as String))
-        .toList()
-      ..sort((Category a, Category b) =>
-          a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    final list =
+        snap.docs
+            .map(
+              (d) => Category(
+                id: int.parse(d.id),
+                name: d.data()['name'] as String,
+              ),
+            )
+            .toList()
+          ..sort(
+            (Category a, Category b) =>
+                a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+          );
     return list;
   }
 
@@ -123,26 +131,29 @@ class FirestoreLedgerRepository implements LedgerRepository {
   Future<List<Account>> listAccounts(int bookId) async {
     await ensureBootstrap();
     final snap = await _accounts.get();
-    final list = snap.docs.map((d) {
-      final m = d.data();
-      return Account(
-        id: int.parse(d.id),
-        bookId: bookId,
-        name: m['name'] as String,
-        kind: AccountKindSerialized.parse(m['kind'] as String),
-      );
-    }).toList()
-      ..sort((Account a, Account b) {
-        final k = a.kind.name.compareTo(b.kind.name);
-        if (k != 0) return k;
-        return a.name.toLowerCase().compareTo(b.name.toLowerCase());
-      });
+    final list =
+        snap.docs.map((d) {
+          final m = d.data();
+          return Account(
+            id: int.parse(d.id),
+            bookId: bookId,
+            name: m['name'] as String,
+            kind: AccountKindSerialized.parse(m['kind'] as String),
+          );
+        }).toList()..sort((Account a, Account b) {
+          final k = a.kind.name.compareTo(b.kind.name);
+          if (k != 0) return k;
+          return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+        });
     return list;
   }
 
   @override
   Future<int?> cashAccountId(int bookId) async {
-    final snap = await _accounts.where('kind', isEqualTo: 'cash').limit(1).get();
+    final snap = await _accounts
+        .where('kind', isEqualTo: 'cash')
+        .limit(1)
+        .get();
     if (snap.docs.isEmpty) return null;
     return int.parse(snap.docs.first.id);
   }
@@ -174,7 +185,10 @@ class FirestoreLedgerRepository implements LedgerRepository {
       final start = DateTime(year, month);
       final end = DateTime(year, month + 1);
       q = q
-          .where('occurredAt', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
+          .where(
+            'occurredAt',
+            isGreaterThanOrEqualTo: Timestamp.fromDate(start),
+          )
           .where('occurredAt', isLessThan: Timestamp.fromDate(end));
     }
     q = q.orderBy('occurredAt').orderBy(FieldPath.documentId);
@@ -317,36 +331,70 @@ class FirestoreLedgerRepository implements LedgerRepository {
     }, SetOptions(merge: true));
   }
 
-  (int, int) _prevMonth(int year, int month) {
-    if (month == 1) return (year - 1, 12);
-    return (year, month - 1);
-  }
-
-  @override
-  Future<int> resolveOpeningMinor(
-    int bookId,
-    int year,
-    int month, [
-    int guard = 0,
-  ]) async {
-    if (guard > 800) return 0;
-    final stored = await getOpeningMinor(bookId, year, month);
-    if (stored != null) return stored;
-    final (py, pm) = _prevMonth(year, month);
-    final prevOpen = await resolveOpeningMinor(bookId, py, pm, guard + 1);
-    final txs = await listTransactions(bookId: bookId, year: py, month: pm);
-    final net = totalsForMonth(txs, py, pm).netMinor;
-    return prevOpen + net;
-  }
-
-  @override
-  Future<MonthlySummary> monthlySummary(
-    int bookId,
+  Future<({DateTime monthStart, int openingMinor})?> _latestOpeningOnOrBefore(
     int year,
     int month,
   ) async {
+    final snap = await _periodOpenings
+        .where(
+          FieldPath.documentId,
+          isLessThanOrEqualTo: _periodKey(year, month),
+        )
+        .orderBy(FieldPath.documentId, descending: true)
+        .limit(1)
+        .get();
+    if (snap.docs.isEmpty) return null;
+
+    final data = snap.docs.first.data();
+    final openingYear = data['year'] as int;
+    final openingMonth = data['month'] as int;
+    return (
+      monthStart: DateTime(openingYear, openingMonth),
+      openingMinor: (data['openingMinor'] as num).toInt(),
+    );
+  }
+
+  Future<int> _netTransactionsBefore(DateTime to, {DateTime? from}) async {
+    Query<Map<String, dynamic>> q = _transactions.where(
+      'occurredAt',
+      isLessThan: Timestamp.fromDate(to),
+    );
+    if (from != null) {
+      q = q.where(
+        'occurredAt',
+        isGreaterThanOrEqualTo: Timestamp.fromDate(from),
+      );
+    }
+
+    final snap = await q.get();
+    var net = 0;
+    for (final d in snap.docs) {
+      final m = d.data();
+      final amount = (m['amountMinor'] as num).toInt();
+      net += m['type'] == TxType.income.name ? amount : -amount;
+    }
+    return net;
+  }
+
+  @override
+  Future<int> resolveOpeningMinor(int bookId, int year, int month) async {
+    final targetStart = DateTime(year, month);
+    final base = await _latestOpeningOnOrBefore(year, month);
+    final net = await _netTransactionsBefore(
+      targetStart,
+      from: base?.monthStart,
+    );
+    return (base?.openingMinor ?? 0) + net;
+  }
+
+  @override
+  Future<MonthlySummary> monthlySummary(int bookId, int year, int month) async {
     final opening = await resolveOpeningMinor(bookId, year, month);
-    final txs = await listTransactions(bookId: bookId, year: year, month: month);
+    final txs = await listTransactions(
+      bookId: bookId,
+      year: year,
+      month: month,
+    );
     final totals = totalsForMonth(txs, year, month);
     final closing = opening + totals.netMinor;
     return MonthlySummary(
@@ -367,15 +415,15 @@ class FirestoreLedgerRepository implements LedgerRepository {
       postedAt: (m['postedAt'] as Timestamp).toDate(),
       amountMinor: (m['amountMinor'] as num).toInt(),
       description: m['description'] as String,
-      matchedTransactionId:
-          matched != null ? (matched as num).toInt() : null,
+      matchedTransactionId: matched != null ? (matched as num).toInt() : null,
     );
   }
 
   @override
   Future<List<BankStatementLine>> listStatementLines(int accountId) async {
-    final snap =
-        await _statementLines.where('accountId', isEqualTo: accountId).get();
+    final snap = await _statementLines
+        .where('accountId', isEqualTo: accountId)
+        .get();
     final lines = snap.docs.map(_lineFromDoc).toList()
       ..sort((BankStatementLine a, BankStatementLine b) {
         final c = b.postedAt.compareTo(a.postedAt);
@@ -430,7 +478,9 @@ class FirestoreLedgerRepository implements LedgerRepository {
     final batch = _db.batch();
     batch.update(lineRef, {'matchedTransactionId': null});
     if (txId != null) {
-      batch.update(_transactions.doc('$txId'), {'clearedAt': FieldValue.delete()});
+      batch.update(_transactions.doc('$txId'), {
+        'clearedAt': FieldValue.delete(),
+      });
     }
     await batch.commit();
   }
@@ -448,7 +498,9 @@ class FirestoreLedgerRepository implements LedgerRepository {
       } else {
         final tx = await getTransaction(line.matchedTransactionId!);
         if (tx != null) {
-          matchedBook += tx.type == TxType.income ? tx.amountMinor : -tx.amountMinor;
+          matchedBook += tx.type == TxType.income
+              ? tx.amountMinor
+              : -tx.amountMinor;
         }
       }
     }
@@ -474,21 +526,21 @@ class FirestoreLedgerRepository implements LedgerRepository {
   @override
   Future<List<BalanceSheetItem>> listBalanceSheetItems(int bookId) async {
     final snap = await _balanceSheetItems.get();
-    final list = snap.docs.map((d) {
-      final m = d.data();
-      return BalanceSheetItem(
-        id: int.parse(d.id),
-        bookId: bookId,
-        section: BalanceSectionSerialized.parse(m['section'] as String),
-        label: m['label'] as String,
-        amountMinor: (m['amountMinor'] as num).toInt(),
-        sortOrder: (m['sortOrder'] as num?)?.toInt() ?? 0,
-      );
-    }).toList()
-      ..sort((BalanceSheetItem a, BalanceSheetItem b) {
-        final s = a.sortOrder.compareTo(b.sortOrder);
-        return s != 0 ? s : a.id.compareTo(b.id);
-      });
+    final list =
+        snap.docs.map((d) {
+          final m = d.data();
+          return BalanceSheetItem(
+            id: int.parse(d.id),
+            bookId: bookId,
+            section: BalanceSectionSerialized.parse(m['section'] as String),
+            label: m['label'] as String,
+            amountMinor: (m['amountMinor'] as num).toInt(),
+            sortOrder: (m['sortOrder'] as num?)?.toInt() ?? 0,
+          );
+        }).toList()..sort((BalanceSheetItem a, BalanceSheetItem b) {
+          final s = a.sortOrder.compareTo(b.sortOrder);
+          return s != 0 ? s : a.id.compareTo(b.id);
+        });
     return list;
   }
 
@@ -579,6 +631,9 @@ class FirestoreLedgerRepository implements LedgerRepository {
           ),
         )
         .toList()
-      ..sort((CategoryRollup a, CategoryRollup b) => a.categoryName.compareTo(b.categoryName));
+      ..sort(
+        (CategoryRollup a, CategoryRollup b) =>
+            a.categoryName.compareTo(b.categoryName),
+      );
   }
 }

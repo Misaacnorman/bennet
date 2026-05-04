@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../application/providers.dart';
+import '../layout/responsive_content.dart';
 import '../widgets/app_scaffold.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -42,6 +43,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
     return BennetScaffold(
       title: 'Settings',
+      contentWidth: ContentWidthMode.narrow,
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -53,27 +55,36 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
           ),
           const SizedBox(height: 16),
-          FilledButton(
-            onPressed: () async {
-              final repo = await ref.read(ledgerRepositoryProvider.future);
-              await repo.setSetting('business_name', _businessCtrl.text.trim());
-              ref.invalidate(businessNameProvider);
-              if (!context.mounted) return;
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Saved')),
-              );
-            },
-            child: const Text('Save'),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 280),
+              child: FilledButton(
+                onPressed: () async {
+                  final repo = await ref.read(ledgerRepositoryProvider.future);
+                  await repo.setSetting('business_name', _businessCtrl.text.trim());
+                  ref.invalidate(businessNameProvider);
+                  if (!context.mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Saved')),
+                  );
+                },
+                child: const Text('Save'),
+              ),
+            ),
           ),
           const SizedBox(height: 24),
-          OutlinedButton.icon(
-            onPressed: () async {
-              await FirebaseAuth.instance.signOut();
-              if (!context.mounted) return;
-              context.go('/login');
-            },
-            icon: const Icon(Icons.logout),
-            label: const Text('Sign out'),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: OutlinedButton.icon(
+              onPressed: () async {
+                await FirebaseAuth.instance.signOut();
+                if (!context.mounted) return;
+                context.go('/login');
+              },
+              icon: const Icon(Icons.logout),
+              label: const Text('Sign out'),
+            ),
           ),
         ],
       ),

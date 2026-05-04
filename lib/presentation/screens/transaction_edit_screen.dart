@@ -11,6 +11,7 @@ import '../../application/providers.dart';
 import '../../core/money.dart';
 import '../../domain/entities.dart';
 import '../../services/receipt_pdf_service.dart';
+import '../layout/responsive_content.dart';
 import '../widgets/app_scaffold.dart';
 
 class TransactionEditScreen extends ConsumerStatefulWidget {
@@ -19,7 +20,8 @@ class TransactionEditScreen extends ConsumerStatefulWidget {
   final int? transactionId;
 
   @override
-  ConsumerState<TransactionEditScreen> createState() => _TransactionEditScreenState();
+  ConsumerState<TransactionEditScreen> createState() =>
+      _TransactionEditScreenState();
 }
 
 class _TransactionEditScreenState extends ConsumerState<TransactionEditScreen> {
@@ -81,7 +83,9 @@ class _TransactionEditScreenState extends ConsumerState<TransactionEditScreen> {
           break;
         }
       }
-      _categoryId = expenseCat?.id ?? (categories.isNotEmpty ? categories.first.id : null);
+      _categoryId =
+          expenseCat?.id ??
+          (categories.isNotEmpty ? categories.first.id : null);
     }
 
     setState(() => _loading = false);
@@ -100,11 +104,15 @@ class _TransactionEditScreenState extends ConsumerState<TransactionEditScreen> {
   Future<void> _save() async {
     final minor = parseMoneyInput(_amountCtrl.text);
     if (minor == null || minor <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Enter a valid amount.')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Enter a valid amount.')));
       return;
     }
     if (_categoryId == null || _accountId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Pick category and account.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Pick category and account.')),
+      );
       return;
     }
 
@@ -120,8 +128,12 @@ class _TransactionEditScreenState extends ConsumerState<TransactionEditScreen> {
         amountMinor: minor,
         occurredAt: _date,
         notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
-        paymentMethod: _methodCtrl.text.trim().isEmpty ? null : _methodCtrl.text.trim(),
-        counterparty: _payCtrl.text.trim().isEmpty ? null : _payCtrl.text.trim(),
+        paymentMethod: _methodCtrl.text.trim().isEmpty
+            ? null
+            : _methodCtrl.text.trim(),
+        counterparty: _payCtrl.text.trim().isEmpty
+            ? null
+            : _payCtrl.text.trim(),
       );
     } else {
       final tx = await repo.getTransaction(widget.transactionId!);
@@ -133,8 +145,12 @@ class _TransactionEditScreenState extends ConsumerState<TransactionEditScreen> {
         amountMinor: minor,
         occurredAt: _date,
         notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
-        paymentMethod: _methodCtrl.text.trim().isEmpty ? null : _methodCtrl.text.trim(),
-        counterparty: _payCtrl.text.trim().isEmpty ? null : _payCtrl.text.trim(),
+        paymentMethod: _methodCtrl.text.trim().isEmpty
+            ? null
+            : _methodCtrl.text.trim(),
+        counterparty: _payCtrl.text.trim().isEmpty
+            ? null
+            : _payCtrl.text.trim(),
         clearedAt: tx?.clearedAt,
       );
     }
@@ -149,8 +165,14 @@ class _TransactionEditScreenState extends ConsumerState<TransactionEditScreen> {
       builder: (ctx) => AlertDialog(
         title: const Text('Delete transaction?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Delete')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete'),
+          ),
         ],
       ),
     );
@@ -167,7 +189,10 @@ class _TransactionEditScreenState extends ConsumerState<TransactionEditScreen> {
     final tx = await repo.getTransaction(widget.transactionId!);
     if (tx == null || !mounted) return;
     final business = await repo.getSetting('business_name');
-    final bytes = await buildTransactionReceiptPdf(transaction: tx, businessName: business);
+    final bytes = await buildTransactionReceiptPdf(
+      transaction: tx,
+      businessName: business,
+    );
     final dir = await getTemporaryDirectory();
     final file = File('${dir.path}/bennet_receipt_${tx.id}.pdf');
     await file.writeAsBytes(bytes, flush: true);
@@ -177,25 +202,45 @@ class _TransactionEditScreenState extends ConsumerState<TransactionEditScreen> {
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const BennetScaffold(title: 'Transaction', body: Center(child: CircularProgressIndicator()));
+      return const BennetScaffold(
+        title: 'Transaction',
+        body: Center(child: CircularProgressIndicator()),
+      );
     }
 
     final categoriesAsync = ref.watch(categoriesProvider);
     final bookAsync = ref.watch(defaultBookProvider);
 
     return bookAsync.when(
-      loading: () => const BennetScaffold(title: 'Transaction', body: Center(child: CircularProgressIndicator())),
-      error: (e, _) => BennetScaffold(title: 'Transaction', body: Center(child: Text('$e'))),
+      loading: () => const BennetScaffold(
+        title: 'Transaction',
+        body: Center(child: CircularProgressIndicator()),
+      ),
+      error: (e, _) => BennetScaffold(
+        title: 'Transaction',
+        body: Center(child: Text('$e')),
+      ),
       data: (book) {
         final accountsAsync = ref.watch(accountsProvider(book.id));
 
         return accountsAsync.when(
-          loading: () => const BennetScaffold(title: 'Transaction', body: Center(child: CircularProgressIndicator())),
-          error: (e, _) => BennetScaffold(title: 'Transaction', body: Center(child: Text('$e'))),
+          loading: () => const BennetScaffold(
+            title: 'Transaction',
+            body: Center(child: CircularProgressIndicator()),
+          ),
+          error: (e, _) => BennetScaffold(
+            title: 'Transaction',
+            body: Center(child: Text('$e')),
+          ),
           data: (accounts) => categoriesAsync.when(
-            loading: () =>
-                const BennetScaffold(title: 'Transaction', body: Center(child: CircularProgressIndicator())),
-            error: (e, _) => BennetScaffold(title: 'Transaction', body: Center(child: Text('$e'))),
+            loading: () => const BennetScaffold(
+              title: 'Transaction',
+              body: Center(child: CircularProgressIndicator()),
+            ),
+            error: (e, _) => BennetScaffold(
+              title: 'Transaction',
+              body: Center(child: Text('$e')),
+            ),
             data: (categories) => BennetScaffold(
               title: _isNew ? 'New transaction' : 'Edit transaction',
               actions: [
@@ -212,66 +257,138 @@ class _TransactionEditScreenState extends ConsumerState<TransactionEditScreen> {
                     tooltip: 'Delete',
                   ),
               ],
-              body: ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  SegmentedButton<TxType>(
-                    segments: const [
-                      ButtonSegment(value: TxType.income, label: Text('Income')),
-                      ButtonSegment(value: TxType.expense, label: Text('Expense')),
-                    ],
-                    selected: {_type},
-                    onSelectionChanged: (s) => setState(() => _type = s.first),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: _amountCtrl,
-                    decoration: const InputDecoration(labelText: 'Amount'),
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  ),
-                  const SizedBox(height: 16),
-                  DropdownButtonFormField<int>(
-                    value: _categoryId,
+              body: LayoutBuilder(
+                builder: (context, constraints) {
+                  final wide = constraints.maxWidth >= Breakpoints.compact;
+                  final categoryField = DropdownButtonFormField<int>(
+                    initialValue: _categoryId,
                     decoration: const InputDecoration(labelText: 'Category'),
                     items: categories
-                        .map((c) => DropdownMenuItem(value: c.id, child: Text(c.name)))
+                        .map(
+                          (c) => DropdownMenuItem(
+                            value: c.id,
+                            child: Text(c.name),
+                          ),
+                        )
                         .toList(),
                     onChanged: (v) => setState(() => _categoryId = v),
-                  ),
-                  const SizedBox(height: 16),
-                  DropdownButtonFormField<int>(
-                    value: _accountId,
+                  );
+                  final accountField = DropdownButtonFormField<int>(
+                    initialValue: _accountId,
                     decoration: const InputDecoration(labelText: 'Account'),
                     items: accounts
-                        .map((a) => DropdownMenuItem(value: a.id, child: Text('${a.name} (${a.kind.name})')))
+                        .map(
+                          (a) => DropdownMenuItem(
+                            value: a.id,
+                            child: Text('${a.name} (${a.kind.name})'),
+                          ),
+                        )
                         .toList(),
                     onChanged: (v) => setState(() => _accountId = v),
-                  ),
-                  const SizedBox(height: 16),
-                  ListTile(
-                    title: const Text('Date'),
-                    subtitle: Text(DateFormat.yMMMd().format(_date)),
-                    trailing: const Icon(Icons.calendar_today),
-                    onTap: _pickDate,
-                  ),
-                  TextField(
-                    controller: _payCtrl,
-                    decoration: const InputDecoration(labelText: 'Payee / payer (optional)'),
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: _methodCtrl,
-                    decoration: const InputDecoration(labelText: 'Payment method (optional)'),
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: _notesCtrl,
-                    decoration: const InputDecoration(labelText: 'Notes (optional)'),
-                    maxLines: 3,
-                  ),
-                  const SizedBox(height: 24),
-                  FilledButton(onPressed: _save, child: const Text('Save')),
-                ],
+                  );
+
+                  return ListView(
+                    padding: const EdgeInsets.all(16),
+                    children: [
+                      SegmentedButton<TxType>(
+                        segments: const [
+                          ButtonSegment(
+                            value: TxType.income,
+                            label: Text('Income'),
+                          ),
+                          ButtonSegment(
+                            value: TxType.expense,
+                            label: Text('Expense'),
+                          ),
+                        ],
+                        selected: {_type},
+                        onSelectionChanged: (s) => setState(() => _type = s.first),
+                      ),
+                      const SizedBox(height: 16),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxWidth: wide ? 280 : double.infinity,
+                          ),
+                          child: TextField(
+                            controller: _amountCtrl,
+                            decoration: const InputDecoration(labelText: 'Amount'),
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      if (wide)
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(child: categoryField),
+                            const SizedBox(width: 16),
+                            Expanded(child: accountField),
+                          ],
+                        )
+                      else ...[
+                        categoryField,
+                        const SizedBox(height: 16),
+                        accountField,
+                      ],
+                      const SizedBox(height: 8),
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Date'),
+                        subtitle: Text(DateFormat.yMMMd().format(_date)),
+                        trailing: const Icon(Icons.calendar_today),
+                        onTap: _pickDate,
+                      ),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 560),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              TextField(
+                                controller: _payCtrl,
+                                decoration: const InputDecoration(
+                                  labelText: 'Payee / payer (optional)',
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              TextField(
+                                controller: _methodCtrl,
+                                decoration: const InputDecoration(
+                                  labelText: 'Payment method (optional)',
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              TextField(
+                                controller: _notesCtrl,
+                                decoration: const InputDecoration(
+                                  labelText: 'Notes (optional)',
+                                ),
+                                maxLines: 3,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 320),
+                          child: FilledButton(
+                            onPressed: _save,
+                            child: const Text('Save'),
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                },
               ),
             ),
           ),

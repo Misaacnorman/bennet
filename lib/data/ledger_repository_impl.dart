@@ -26,9 +26,7 @@ class LedgerRepositoryImpl implements LedgerRepository {
   Future<List<Category>> listCategories() async {
     final rows = await _db.query('categories', orderBy: 'name COLLATE NOCASE');
     return rows
-        .map(
-          (r) => Category(id: r['id'] as int, name: r['name'] as String),
-        )
+        .map((r) => Category(id: r['id'] as int, name: r['name'] as String))
         .toList();
   }
 
@@ -44,11 +42,11 @@ class LedgerRepositoryImpl implements LedgerRepository {
   }
 
   Account _accountFromRow(Map<String, Object?> r) => Account(
-        id: r['id'] as int,
-        bookId: r['book_id'] as int,
-        name: r['name'] as String,
-        kind: AccountKindSerialized.parse(r['kind'] as String),
-      );
+    id: r['id'] as int,
+    bookId: r['book_id'] as int,
+    name: r['name'] as String,
+    kind: AccountKindSerialized.parse(r['kind'] as String),
+  );
 
   @override
   Future<int?> cashAccountId(int bookId) async {
@@ -64,10 +62,7 @@ class LedgerRepositoryImpl implements LedgerRepository {
   }
 
   @override
-  Future<int> addBankAccount({
-    required int bookId,
-    required String name,
-  }) {
+  Future<int> addBankAccount({required int bookId, required String name}) {
     return _db.insert('accounts', {
       'book_id': bookId,
       'name': name,
@@ -94,17 +89,14 @@ class LedgerRepositoryImpl implements LedgerRepository {
       where.add('t.account_id = ?');
       args.add(accountId);
     }
-    final rows = await _db.rawQuery(
-      '''
+    final rows = await _db.rawQuery('''
 SELECT t.*, c.name AS category_name, a.name AS account_name
 FROM transactions t
 JOIN categories c ON c.id = t.category_id
 JOIN accounts a ON a.id = t.account_id
 WHERE ${where.join(' AND ')}
 ORDER BY t.occurred_at ASC, t.id ASC
-''',
-      args,
-    );
+''', args);
     return rows.map(_txFromRow).toList();
   }
 
@@ -121,8 +113,9 @@ ORDER BY t.occurred_at ASC, t.id ASC
       notes: r['notes'] as String?,
       paymentMethod: r['payment_method'] as String?,
       counterparty: r['counterparty'] as String?,
-      clearedAt:
-          cleared != null ? DateTime.fromMillisecondsSinceEpoch(cleared) : null,
+      clearedAt: cleared != null
+          ? DateTime.fromMillisecondsSinceEpoch(cleared)
+          : null,
       categoryName: r['category_name'] as String?,
       accountName: r['account_name'] as String?,
     );
@@ -251,36 +244,75 @@ LIMIT 1
     }
   }
 
-  (int, int) _prevMonth(int year, int month) {
-    if (month == 1) return (year - 1, 12);
-    return (year, month - 1);
-  }
-
-  @override
-  Future<int> resolveOpeningMinor(
-    int bookId,
-    int year,
-    int month, [
-    int guard = 0,
-  ]) async {
-    if (guard > 800) return 0;
-    final stored = await getOpeningMinor(bookId, year, month);
-    if (stored != null) return stored;
-    final (py, pm) = _prevMonth(year, month);
-    final prevOpen = await resolveOpeningMinor(bookId, py, pm, guard + 1);
-    final txs = await listTransactions(bookId: bookId, year: py, month: pm);
-    final net = totalsForMonth(txs, py, pm).netMinor;
-    return prevOpen + net;
-  }
-
-  @override
-  Future<MonthlySummary> monthlySummary(
+  Future<({DateTime monthStart, int openingMinor})?> _latestOpeningOnOrBefore(
     int bookId,
     int year,
     int month,
   ) async {
+    final rows = await _db.query(
+      'period_openings',
+      columns: ['year', 'month', 'opening_balance_minor'],
+      where: 'book_id = ? AND (year < ? OR (year = ? AND month <= ?))',
+      whereArgs: [bookId, year, year, month],
+      orderBy: 'year DESC, month DESC',
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+
+    final row = rows.first;
+    final openingYear = row['year'] as int;
+    final openingMonth = row['month'] as int;
+    return (
+      monthStart: DateTime(openingYear, openingMonth),
+      openingMinor: row['opening_balance_minor'] as int,
+    );
+  }
+
+  Future<int> _netTransactionsBefore(
+    int bookId,
+    DateTime to, {
+    DateTime? from,
+  }) async {
+    final where = <String>['book_id = ?', 'occurred_at < ?'];
+    final args = <Object?>[bookId, to.millisecondsSinceEpoch];
+    if (from != null) {
+      where.add('occurred_at >= ?');
+      args.add(from.millisecondsSinceEpoch);
+    }
+
+    final rows = await _db.rawQuery('''
+SELECT COALESCE(SUM(
+  CASE type
+    WHEN 'income' THEN amount_minor
+    ELSE -amount_minor
+  END
+), 0) AS net
+FROM transactions
+WHERE ${where.join(' AND ')}
+''', args);
+    return rows.first['net'] as int;
+  }
+
+  @override
+  Future<int> resolveOpeningMinor(int bookId, int year, int month) async {
+    final targetStart = DateTime(year, month);
+    final base = await _latestOpeningOnOrBefore(bookId, year, month);
+    final net = await _netTransactionsBefore(
+      bookId,
+      targetStart,
+      from: base?.monthStart,
+    );
+    return (base?.openingMinor ?? 0) + net;
+  }
+
+  @override
+  Future<MonthlySummary> monthlySummary(int bookId, int year, int month) async {
     final opening = await resolveOpeningMinor(bookId, year, month);
-    final txs = await listTransactions(bookId: bookId, year: year, month: month);
+    final txs = await listTransactions(
+      bookId: bookId,
+      year: year,
+      month: month,
+    );
     final totals = totalsForMonth(txs, year, month);
     final closing = opening + totals.netMinor;
     return MonthlySummary(
@@ -304,14 +336,13 @@ LIMIT 1
   }
 
   BankStatementLine _stmtFromRow(Map<String, Object?> r) => BankStatementLine(
-        id: r['id'] as int,
-        accountId: r['account_id'] as int,
-        postedAt:
-            DateTime.fromMillisecondsSinceEpoch(r['posted_at'] as int),
-        amountMinor: r['amount_minor'] as int,
-        description: r['description'] as String,
-        matchedTransactionId: r['matched_transaction_id'] as int?,
-      );
+    id: r['id'] as int,
+    accountId: r['account_id'] as int,
+    postedAt: DateTime.fromMillisecondsSinceEpoch(r['posted_at'] as int),
+    amountMinor: r['amount_minor'] as int,
+    description: r['description'] as String,
+    matchedTransactionId: r['matched_transaction_id'] as int?,
+  );
 
   @override
   Future<int> insertStatementLine({
@@ -437,13 +468,13 @@ SELECT * FROM transactions WHERE account_id = ?
   }
 
   BalanceSheetItem _bsFromRow(Map<String, Object?> r) => BalanceSheetItem(
-        id: r['id'] as int,
-        bookId: r['book_id'] as int,
-        section: BalanceSectionSerialized.parse(r['section'] as String),
-        label: r['label'] as String,
-        amountMinor: r['amount_minor'] as int,
-        sortOrder: r['sort_order'] as int,
-      );
+    id: r['id'] as int,
+    bookId: r['book_id'] as int,
+    section: BalanceSectionSerialized.parse(r['section'] as String),
+    label: r['label'] as String,
+    amountMinor: r['amount_minor'] as int,
+    sortOrder: r['sort_order'] as int,
+  );
 
   @override
   Future<int> insertBalanceSheetItem({
@@ -471,11 +502,7 @@ SELECT * FROM transactions WHERE account_id = ?
   }) async {
     await _db.update(
       'balance_sheet_items',
-      {
-        'label': label,
-        'amount_minor': amountMinor,
-        'sort_order': sortOrder,
-      },
+      {'label': label, 'amount_minor': amountMinor, 'sort_order': sortOrder},
       where: 'id = ?',
       whereArgs: [id],
     );
@@ -501,11 +528,10 @@ SELECT * FROM transactions WHERE account_id = ?
 
   @override
   Future<void> setSetting(String key, String value) async {
-    await _db.insert(
-      'app_settings',
-      {'key': key, 'value': value},
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    await _db.insert('app_settings', {
+      'key': key,
+      'value': value,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   @override
@@ -527,11 +553,7 @@ WHERE t.book_id = ?
 GROUP BY c.id, c.name
 ORDER BY c.name COLLATE NOCASE
 ''',
-      [
-        bookId,
-        from.millisecondsSinceEpoch,
-        to.millisecondsSinceEpoch,
-      ],
+      [bookId, from.millisecondsSinceEpoch, to.millisecondsSinceEpoch],
     );
     return rows
         .map(

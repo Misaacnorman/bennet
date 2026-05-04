@@ -11,6 +11,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../application/providers.dart';
 import '../../core/money.dart';
+import '../layout/responsive_content.dart';
 import '../widgets/app_scaffold.dart';
 
 class TaxExportScreen extends ConsumerStatefulWidget {
@@ -141,10 +142,12 @@ class _TaxExportScreenState extends ConsumerState<TaxExportScreen> {
       error: (e, _) => BennetScaffold(title: 'Tax export', body: Center(child: Text('$e'))),
       data: (book) => BennetScaffold(
         title: 'Tax export',
+        contentWidth: ContentWidthMode.narrow,
         body: ListView(
           padding: const EdgeInsets.all(16),
           children: [
             ListTile(
+              contentPadding: EdgeInsets.zero,
               title: const Text('Date range'),
               subtitle: Text(
                 '${DateFormat.yMMMd().format(_range.start)} – ${DateFormat.yMMMd().format(_range.end)}',
@@ -158,16 +161,27 @@ class _TaxExportScreenState extends ConsumerState<TaxExportScreen> {
               style: Theme.of(context).textTheme.bodyMedium,
             ),
             const SizedBox(height: 24),
-            FilledButton.icon(
-              onPressed: () => _exportCsv(book.id),
-              icon: const Icon(Icons.table_chart_outlined),
-              label: const Text('Export CSV'),
-            ),
-            const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: () => _exportPdf(book.id),
-              icon: const Icon(Icons.picture_as_pdf_outlined),
-              label: const Text('Export PDF summary'),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 320),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    FilledButton.icon(
+                      onPressed: () => _exportCsv(book.id),
+                      icon: const Icon(Icons.table_chart_outlined),
+                      label: const Text('Export CSV'),
+                    ),
+                    const SizedBox(height: 12),
+                    OutlinedButton.icon(
+                      onPressed: () => _exportPdf(book.id),
+                      icon: const Icon(Icons.picture_as_pdf_outlined),
+                      label: const Text('Export PDF summary'),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ],
         ),

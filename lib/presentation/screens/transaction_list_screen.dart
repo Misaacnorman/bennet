@@ -6,13 +6,15 @@ import 'package:intl/intl.dart';
 import '../../application/providers.dart';
 import '../../core/money.dart';
 import '../../domain/entities.dart';
+import '../layout/responsive_content.dart';
 import '../widgets/app_scaffold.dart';
 
 class TransactionListScreen extends ConsumerStatefulWidget {
   const TransactionListScreen({super.key});
 
   @override
-  ConsumerState<TransactionListScreen> createState() => _TransactionListScreenState();
+  ConsumerState<TransactionListScreen> createState() =>
+      _TransactionListScreenState();
 }
 
 class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
@@ -56,20 +58,105 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
     if (m != null) setState(() => _month = DateTime(y, m));
   }
 
+  Widget _listView(BuildContext context, List<LedgerTransaction> txs) {
+    return ListView.separated(
+      itemCount: txs.length,
+      separatorBuilder: (_, _) => const Divider(height: 1),
+      itemBuilder: (ctx, i) {
+        final t = txs[txs.length - 1 - i];
+        return ListTile(
+          leading: Icon(
+            t.type == TxType.income ? Icons.south_west : Icons.north_east,
+            color: t.type == TxType.income ? Colors.green : Colors.red,
+          ),
+          title: Text(t.categoryName ?? 'Category'),
+          subtitle: Text(
+            '${DateFormat.MMMd().format(t.occurredAt)} · ${t.accountName ?? ''}',
+          ),
+          trailing: Text(
+            (t.type == TxType.income ? '+' : '-') + formatMoney(t.amountMinor),
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+          onTap: () => context.go('/transactions/${t.id}'),
+        );
+      },
+    );
+  }
+
+  Widget _dataTable(BuildContext context, List<LedgerTransaction> txs) {
+    final ordered = txs.reversed.toList();
+    return Scrollbar(
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: SingleChildScrollView(
+          child: DataTable(
+            columnSpacing: 20,
+            columns: const [
+              DataColumn(label: Text('Date')),
+              DataColumn(label: Text('Type')),
+              DataColumn(label: Text('Category')),
+              DataColumn(label: Text('Account')),
+              DataColumn(label: Text('Amount'), numeric: true),
+            ],
+            rows: [
+              for (final t in ordered)
+                DataRow(
+                  onSelectChanged: (_) => context.go('/transactions/${t.id}'),
+                  cells: [
+                    DataCell(Text(DateFormat.yMMMd().format(t.occurredAt))),
+                    DataCell(Text(t.type == TxType.income ? 'Income' : 'Expense')),
+                    DataCell(Text(t.categoryName ?? '')),
+                    DataCell(Text(t.accountName ?? '')),
+                    DataCell(
+                      Text(
+                        '${t.type == TxType.income ? '+' : '-'}${formatMoney(t.amountMinor)}',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: t.type == TxType.income
+                              ? Colors.green.shade700
+                              : Colors.red.shade700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final bookAsync = ref.watch(defaultBookProvider);
 
     return bookAsync.when(
-      loading: () => const BennetScaffold(title: 'Transactions', body: Center(child: CircularProgressIndicator())),
-      error: (e, _) => BennetScaffold(title: 'Transactions', body: Center(child: Text('$e'))),
+      loading: () => const BennetScaffold(
+        title: 'Transactions',
+        body: Center(child: CircularProgressIndicator()),
+      ),
+      error: (e, _) => BennetScaffold(
+        title: 'Transactions',
+        body: Center(child: Text('$e')),
+      ),
       data: (book) {
         final txsAsync = ref.watch(
-          transactionsProvider((bookId: book.id, year: _month.year, month: _month.month)),
+          transactionsProvider((
+            bookId: book.id,
+            year: _month.year,
+            month: _month.month,
+          )),
         );
         return txsAsync.when(
-          loading: () => const BennetScaffold(title: 'Transactions', body: Center(child: CircularProgressIndicator())),
-          error: (e, _) => BennetScaffold(title: 'Transactions', body: Center(child: Text('$e'))),
+          loading: () => const BennetScaffold(
+            title: 'Transactions',
+            body: Center(child: CircularProgressIndicator()),
+          ),
+          error: (e, _) => BennetScaffold(
+            title: 'Transactions',
+            body: Center(child: Text('$e')),
+          ),
           data: (txs) => BennetScaffold(
             title: 'Transactions',
             fab: FloatingActionButton(
@@ -83,43 +170,38 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
                 tooltip: 'Month',
               ),
             ],
-            body: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
+            body: LayoutBuilder(
+              builder: (context, constraints) {
+                final useTable = constraints.maxWidth >= Breakpoints.expanded;
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                  child: Text(
-                    DateFormat.yMMMM().format(_month),
-                    style: Theme.of(context).textTheme.titleMedium,
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 400),
+                      child: Text(
+                        DateFormat.yMMMM().format(_month),
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                    ),
                   ),
                 ),
-                Expanded(
-                  child: txs.isEmpty
-                      ? const Center(child: Text('No transactions this month.'))
-                      : ListView.separated(
-                          itemCount: txs.length,
-                          separatorBuilder: (_, __) => const Divider(height: 1),
-                          itemBuilder: (ctx, i) {
-                            final t = txs[txs.length - 1 - i];
-                            return ListTile(
-                              leading: Icon(
-                                t.type == TxType.income ? Icons.south_west : Icons.north_east,
-                                color: t.type == TxType.income ? Colors.green : Colors.red,
-                              ),
-                              title: Text(t.categoryName ?? 'Category'),
-                              subtitle: Text(
-                                '${DateFormat.MMMd().format(t.occurredAt)} · ${t.accountName ?? ''}',
-                              ),
-                              trailing: Text(
-                                (t.type == TxType.income ? '+' : '-') + formatMoney(t.amountMinor),
-                                style: const TextStyle(fontWeight: FontWeight.w600),
-                              ),
-                              onTap: () => context.go('/transactions/${t.id}'),
-                            );
-                          },
-                        ),
-                ),
-              ],
+                    Expanded(
+                      child: txs.isEmpty
+                          ? const Center(child: Text('No transactions this month.'))
+                          : useTable
+                              ? Padding(
+                                  padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                                  child: _dataTable(context, txs),
+                                )
+                              : _listView(context, txs),
+                    ),
+                  ],
+                );
+              },
             ),
           ),
         );

@@ -100,23 +100,47 @@ class _MonthlySummaryScreenState extends ConsumerState<MonthlySummaryScreen> {
               children: [
                 Text(DateFormat.yMMMM().format(_month), style: Theme.of(context).textTheme.titleLarge),
                 const SizedBox(height: 16),
-                TextField(
-                  controller: _openingCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Opening balance (edit & save)',
-                    helperText: 'Stored opening for this month; affects closing.',
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 440),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        TextField(
+                          controller: _openingCtrl,
+                          decoration: const InputDecoration(
+                            labelText: 'Opening balance (edit & save)',
+                            helperText: 'Stored opening for this month; affects closing.',
+                          ),
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
+                          inputFormatters: [
+                            FilteringTextInputFormatter.allow(RegExp(r'^-?\d*\.?\d{0,2}')),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        OutlinedButton(onPressed: _saveOpening, child: const Text('Save opening balance')),
+                      ],
+                    ),
                   ),
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
-                  inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^-?\d*\.?\d{0,2}'))],
                 ),
-                const SizedBox(height: 8),
-                OutlinedButton(onPressed: _saveOpening, child: const Text('Save opening balance')),
                 const Divider(height: 32),
-                _row('Opening balance', formatMoney(s.openingMinor)),
-                _row('Total income', formatMoney(s.totalIncomeMinor)),
-                _row('Total expenses', formatMoney(s.totalExpenseMinor)),
-                _row('Profit / loss', formatMoney(s.netMinor)),
-                _row('Closing balance', formatMoney(s.closingMinor), emphasize: true),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 520),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _row('Opening balance', formatMoney(s.openingMinor)),
+                        _row('Total income', formatMoney(s.totalIncomeMinor)),
+                        _row('Total expenses', formatMoney(s.totalExpenseMinor)),
+                        _row('Profit / loss', formatMoney(s.netMinor)),
+                        _row('Closing balance', formatMoney(s.closingMinor), emphasize: true),
+                      ],
+                    ),
+                  ),
+                ),
               ],
             ),
           ),

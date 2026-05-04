@@ -32,7 +32,9 @@ class _CashBookScreenState extends ConsumerState<CashBookScreen> {
       firstDate: DateTime(2000),
       lastDate: DateTime(2100),
     );
-    if (picked != null) setState(() => _month = DateTime(picked.year, picked.month));
+    if (picked != null) {
+      setState(() => _month = DateTime(picked.year, picked.month));
+    }
   }
 
   @override
@@ -40,45 +42,90 @@ class _CashBookScreenState extends ConsumerState<CashBookScreen> {
     final bookAsync = ref.watch(defaultBookProvider);
 
     return bookAsync.when(
-      loading: () => const BennetScaffold(title: 'Cash book', body: Center(child: CircularProgressIndicator())),
-      error: (e, _) => BennetScaffold(title: 'Cash book', body: Center(child: Text('$e'))),
+      loading: () => const BennetScaffold(
+        title: 'Cash book',
+        body: Center(child: CircularProgressIndicator()),
+      ),
+      error: (e, _) => BennetScaffold(
+        title: 'Cash book',
+        body: Center(child: Text('$e')),
+      ),
       data: (book) {
         final txsAsync = ref.watch(
-          transactionsProvider((bookId: book.id, year: _month.year, month: _month.month)),
+          transactionsProvider((
+            bookId: book.id,
+            year: _month.year,
+            month: _month.month,
+          )),
         );
         final openingAsync = ref.watch(
-          openingBalanceProvider((bookId: book.id, year: _month.year, month: _month.month)),
+          openingBalanceProvider((
+            bookId: book.id,
+            year: _month.year,
+            month: _month.month,
+          )),
         );
 
         return openingAsync.when(
-          loading: () =>
-              const BennetScaffold(title: 'Cash book', body: Center(child: CircularProgressIndicator())),
-          error: (e, _) => BennetScaffold(title: 'Cash book', body: Center(child: Text('$e'))),
+          loading: () => const BennetScaffold(
+            title: 'Cash book',
+            body: Center(child: CircularProgressIndicator()),
+          ),
+          error: (e, _) => BennetScaffold(
+            title: 'Cash book',
+            body: Center(child: Text('$e')),
+          ),
           data: (opening) => txsAsync.when(
-            loading: () =>
-                const BennetScaffold(title: 'Cash book', body: Center(child: CircularProgressIndicator())),
-            error: (e, _) => BennetScaffold(title: 'Cash book', body: Center(child: Text('$e'))),
+            loading: () => const BennetScaffold(
+              title: 'Cash book',
+              body: Center(child: CircularProgressIndicator()),
+            ),
+            error: (e, _) => BennetScaffold(
+              title: 'Cash book',
+              body: Center(child: Text('$e')),
+            ),
             data: (txs) {
               final sorted = List<LedgerTransaction>.from(txs);
-              final runs = runningBalances(openingMinor: opening, sortedAscending: sorted);
+              final runs = runningBalances(
+                openingMinor: opening,
+                sortedAscending: sorted,
+              );
               return BennetScaffold(
                 title: 'Cash book',
                 actions: [
-                  IconButton(icon: const Icon(Icons.calendar_month), onPressed: _pickMonth),
+                  IconButton(
+                    icon: const Icon(Icons.calendar_month),
+                    onPressed: _pickMonth,
+                  ),
                 ],
                 body: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                      child: Text(
-                        DateFormat.yMMMM().format(_month),
-                        style: Theme.of(context).textTheme.titleMedium,
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 360),
+                          child: Text(
+                            DateFormat.yMMMM().format(_month),
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                        ),
                       ),
                     ),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Text('Opening: ${formatMoney(opening)}', style: Theme.of(context).textTheme.bodySmall),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 400),
+                          child: Text(
+                            'Opening: ${formatMoney(opening)}',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ),
+                      ),
                     ),
                     const Divider(),
                     Expanded(
@@ -86,7 +133,8 @@ class _CashBookScreenState extends ConsumerState<CashBookScreen> {
                           ? const Center(child: Text('No entries this month.'))
                           : ListView.separated(
                               itemCount: sorted.length,
-                              separatorBuilder: (_, __) => const Divider(height: 1),
+                              separatorBuilder: (_, _) =>
+                                  const Divider(height: 1),
                               itemBuilder: (ctx, i) {
                                 final t = sorted[i];
                                 final bal = runs[i];
@@ -102,9 +150,16 @@ class _CashBookScreenState extends ConsumerState<CashBookScreen> {
                                     children: [
                                       Text(
                                         '${t.type == TxType.income ? '+' : '-'}${formatMoney(t.amountMinor)}',
-                                        style: const TextStyle(fontWeight: FontWeight.w600),
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                        ),
                                       ),
-                                      Text(formatMoney(bal), style: Theme.of(context).textTheme.bodySmall),
+                                      Text(
+                                        formatMoney(bal),
+                                        style: Theme.of(
+                                          context,
+                                        ).textTheme.bodySmall,
+                                      ),
                                     ],
                                   ),
                                 );
