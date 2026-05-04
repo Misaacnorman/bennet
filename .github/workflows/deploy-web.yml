@@ -7,7 +7,7 @@
 # IAM (Google Cloud Console → IAM → grant these to that service account principal):
 #   • roles/serviceusage.serviceUsageViewer — avoids 403 on serviceusage.googleapis.com
 #     ("Permission denied to get service [firestore.googleapis.com]")
-#   • roles/datastore.owner — deploy Firestore rules & indexes (or narrower rules-only roles)
+#   • roles/firebaserules.admin — deploy/test Firestore security rules (firebaserules.googleapis.com)
 #   • Hosting deploy via FirebaseExtended/action-hosting-deploy usually works with the default
 #     firebase-adminsdk-* account; if not, add roles/firebasehosting.admin
 #
