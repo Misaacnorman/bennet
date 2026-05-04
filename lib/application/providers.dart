@@ -1,13 +1,32 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../domain/entities.dart';
 import '../domain/ledger_repository.dart';
 import '../data/database/sqlite_init.dart';
 import '../data/ledger_repository_impl.dart';
+import '../data/firebase/firestore_ledger_repository.dart';
+
+/// Firebase auth stream (null when signed out).
+final firebaseAuthStateProvider = StreamProvider<User?>((ref) {
+  return FirebaseAuth.instance.authStateChanges();
+});
+
+/// Resolved UID for data layer (handles brief AsyncLoading after startup).
+final currentUidProvider = Provider<String?>((ref) {
+  final async = ref.watch(firebaseAuthStateProvider);
+  if (async.hasValue && async.requireValue != null) {
+    return async.requireValue!.uid;
+  }
+  return FirebaseAuth.instance.currentUser?.uid;
+});
 
 final ledgerRepositoryProvider = FutureProvider<LedgerRepository>((ref) async {
-  ensureSqlitePlatformInitialized();
-  return LedgerRepositoryImpl.open();
+  final uid = ref.watch(currentUidProvider);
+  if (uid == null) throw StateError('Not signed in');
+  final repo = FirestoreLedgerRepository(uid: uid);
+  await repo.ensureBootstrap();
+  return repo;
 });
 
 final defaultBookProvider = FutureProvider<Book>((ref) async {
@@ -81,9 +100,16 @@ void invalidateLedger(WidgetRef ref) {
   ref.invalidate(reconciliationBundleProvider);
   ref.invalidate(balanceSheetItemsProvider);
   ref.invalidate(defaultBookProvider);
+  ref.invalidate(categoriesProvider);
 }
 
 extension LedgerRepoX on WidgetRef {
   Future<LedgerRepository> get ledger async =>
       read(ledgerRepositoryProvider.future);
+}
+
+/// Opens local SQLite ledger (no Firebase). Use with `USE_SQLITE=true` from main.dart overrides only.
+Future<LedgerRepository> openSqliteLedger() async {
+  ensureSqlitePlatformInitialized();
+  return LedgerRepositoryImpl.open();
 }

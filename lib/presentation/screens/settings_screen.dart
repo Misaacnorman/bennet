@@ -1,5 +1,7 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../application/providers.dart';
 import '../widgets/app_scaffold.dart';
@@ -62,6 +64,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               );
             },
             child: const Text('Save'),
+          ),
+          const SizedBox(height: 24),
+          OutlinedButton.icon(
+            onPressed: () async {
+              await FirebaseAuth.instance.signOut();
+              if (!context.mounted) return;
+              context.go('/login');
+            },
+            icon: const Icon(Icons.logout),
+            label: const Text('Sign out'),
           ),
         ],
       ),

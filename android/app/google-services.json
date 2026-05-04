@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "981293790008",
+    "project_id": "bennet-e696b",
+    "storage_bucket": "bennet-e696b.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:981293790008:android:0c2e43464bda2fcbf487cd",
+        "android_client_info": {
+          "package_name": "com.bennet.bennet"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA98P3NHaKX9xwIpvIU7Dkv4ZdtAKGgcJE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

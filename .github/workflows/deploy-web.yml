@@ -1,0 +1,37 @@
+# Builds Flutter web and deploys to Firebase Hosting on push to main.
+#
+# Not "Firebase App Hosting" (that is a separate Firebase product with its own
+# GitHub integration). This workflow uses classic Firebase Hosting + GitHub Actions.
+#
+# Required repo secrets (Settings → Secrets and variables → Actions):
+#   FIREBASE_SERVICE_ACCOUNT — full JSON of a GCP service account with Hosting
+#     deploy rights (Firebase Console → Project settings → Service accounts).
+
+name: Deploy web to Firebase Hosting
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+      - run: flutter build web --release
+
+      - uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          channelId: live
+          entryPoint: .

@@ -31,6 +31,15 @@ migrate_working_dir/
 .pub-cache/
 .pub/
 /build/
+
+# Firebase CLI
+.firebase/
+firebase-debug.log
+firestore-debug.log
+
+# Firebase Admin SDK keys (never commit)
+**/*firebase-adminsdk*.json
+**/serviceaccount*.json
 /coverage/
 
 # Symbolication related
