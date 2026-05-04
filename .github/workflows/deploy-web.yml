@@ -4,8 +4,8 @@
 # GitHub integration). This workflow uses classic Firebase Hosting + GitHub Actions.
 #
 # Required repo secrets (Settings → Secrets and variables → Actions):
-#   FIREBASE_SERVICE_ACCOUNT — full JSON of a GCP service account with Hosting
-#     deploy rights (Firebase Console → Project settings → Service accounts).
+#   FIREBASE_SERVICE_ACCOUNT — full JSON of a GCP service account with rights to
+#     deploy Hosting and Firestore rules (Firebase Console → Project settings → Service accounts).
 
 name: Deploy web to Firebase Hosting
 
@@ -20,6 +20,17 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
+
+      # Hosting-only deploys used to skip Firestore → new DBs keep default deny-all rules.
+      - name: Deploy Firestore rules & indexes
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          echo "$FIREBASE_SERVICE_ACCOUNT" > "${RUNNER_TEMP}/firebase-sa.json"
+          export GOOGLE_APPLICATION_CREDENTIALS="${RUNNER_TEMP}/firebase-sa.json"
+          export CI=true
+          npm install -g firebase-tools
+          firebase deploy --only firestore --non-interactive
 
       - uses: subosito/flutter-action@v2
         with:
