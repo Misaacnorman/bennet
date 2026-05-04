@@ -18,14 +18,46 @@ class BennetNavDestination {
 /// Single source for drawer + [NavigationRail] destinations.
 abstract final class BennetNav {
   static const List<BennetNavDestination> destinations = [
-    BennetNavDestination(path: '/', icon: Icons.dashboard_outlined, label: 'Dashboard'),
-    BennetNavDestination(path: '/transactions', icon: Icons.receipt_long, label: 'Transactions'),
-    BennetNavDestination(path: '/monthly', icon: Icons.calendar_month, label: 'Monthly summary'),
-    BennetNavDestination(path: '/cashbook', icon: Icons.menu_book_outlined, label: 'Cash book'),
-    BennetNavDestination(path: '/reconciliation', icon: Icons.account_balance, label: 'Reconciliation'),
-    BennetNavDestination(path: '/balance-sheet', icon: Icons.table_chart, label: 'Balance sheet'),
-    BennetNavDestination(path: '/reports', icon: Icons.description_outlined, label: 'Tax export'),
-    BennetNavDestination(path: '/settings', icon: Icons.settings_outlined, label: 'Settings'),
+    BennetNavDestination(
+      path: '/',
+      icon: Icons.dashboard_outlined,
+      label: 'Dashboard',
+    ),
+    BennetNavDestination(
+      path: '/transactions',
+      icon: Icons.receipt_long,
+      label: 'Transactions',
+    ),
+    BennetNavDestination(
+      path: '/monthly',
+      icon: Icons.calendar_month,
+      label: 'Monthly summary',
+    ),
+    BennetNavDestination(
+      path: '/cashbook',
+      icon: Icons.menu_book_outlined,
+      label: 'Cash book',
+    ),
+    BennetNavDestination(
+      path: '/reconciliation',
+      icon: Icons.account_balance,
+      label: 'Reconciliation',
+    ),
+    BennetNavDestination(
+      path: '/balance-sheet',
+      icon: Icons.table_chart,
+      label: 'Balance sheet',
+    ),
+    BennetNavDestination(
+      path: '/reports',
+      icon: Icons.description_outlined,
+      label: 'Tax export',
+    ),
+    BennetNavDestination(
+      path: '/settings',
+      icon: Icons.settings_outlined,
+      label: 'Settings',
+    ),
   ];
 
   static int selectedIndex(String uriPath) {
@@ -131,8 +163,8 @@ class BennetScaffold extends StatelessWidget {
                   child: Text(
                     'Bennet',
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
                 destinations: [

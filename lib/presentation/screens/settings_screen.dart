@@ -39,7 +39,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const BennetScaffold(title: 'Settings', body: Center(child: CircularProgressIndicator()));
+      return const BennetScaffold(
+        title: 'Settings',
+        body: Center(child: CircularProgressIndicator()),
+      );
     }
     return BennetScaffold(
       title: 'Settings',
@@ -47,43 +50,54 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          TextField(
-            controller: _businessCtrl,
-            decoration: const InputDecoration(
-              labelText: 'Business / trader name',
-              helperText: 'Shown on PDF receipts and summaries',
+          Align(
+            alignment: Alignment.centerLeft,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 440),
+              child: TextField(
+                controller: _businessCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Business / trader name',
+                  helperText: 'Shown on PDF receipts and summaries',
+                ),
+              ),
             ),
           ),
           const SizedBox(height: 16),
           Align(
             alignment: Alignment.centerLeft,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 280),
-              child: FilledButton(
-                onPressed: () async {
-                  final repo = await ref.read(ledgerRepositoryProvider.future);
-                  await repo.setSetting('business_name', _businessCtrl.text.trim());
-                  ref.invalidate(businessNameProvider);
-                  if (!context.mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Saved')),
-                  );
-                },
-                child: const Text('Save'),
-              ),
-            ),
-          ),
-          const SizedBox(height: 24),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: OutlinedButton.icon(
-              onPressed: () async {
-                await FirebaseAuth.instance.signOut();
-                if (!context.mounted) return;
-                context.go('/login');
-              },
-              icon: const Icon(Icons.logout),
-              label: const Text('Sign out'),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                FilledButton(
+                  onPressed: () async {
+                    final repo = await ref.read(
+                      ledgerRepositoryProvider.future,
+                    );
+                    await repo.setSetting(
+                      'business_name',
+                      _businessCtrl.text.trim(),
+                    );
+                    ref.invalidate(businessNameProvider);
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(const SnackBar(content: Text('Saved')));
+                  },
+                  child: const Text('Save'),
+                ),
+                const SizedBox(height: 24),
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    await FirebaseAuth.instance.signOut();
+                    if (!context.mounted) return;
+                    context.go('/login');
+                  },
+                  icon: const Icon(Icons.logout),
+                  label: const Text('Sign out'),
+                ),
+              ],
             ),
           ),
         ],

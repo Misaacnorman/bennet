@@ -46,7 +46,10 @@ class _SignupScreenState extends State<SignupScreen> {
       _error = null;
     });
     try {
-      await FirebaseAuth.instance.createUserWithEmailAndPassword(email: email, password: password);
+      await FirebaseAuth.instance.createUserWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
       if (mounted) context.go('/');
     } on FirebaseAuthException catch (e) {
       setState(() => _error = e.message ?? e.code);
@@ -119,7 +122,9 @@ class _SignupScreenState extends State<SignupScreen> {
         children: [
           Text(
             'Already have an account? ',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
           ),
           TextButton(
             onPressed: _busy ? null : () => context.go('/login'),

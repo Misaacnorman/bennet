@@ -39,33 +39,59 @@ class _TaxExportScreenState extends ConsumerState<TaxExportScreen> {
 
   Future<void> _exportCsv(int bookId) async {
     final repo = await ref.read(ledgerRepositoryProvider.future);
-    final from = DateTime(_range.start.year, _range.start.month, _range.start.day);
-    final to = DateTime(_range.end.year, _range.end.month, _range.end.day)
-        .add(const Duration(days: 1));
-    final rollups = await repo.categoryRollups(bookId: bookId, from: from, to: to);
+    final from = DateTime(
+      _range.start.year,
+      _range.start.month,
+      _range.start.day,
+    );
+    final to = DateTime(
+      _range.end.year,
+      _range.end.month,
+      _range.end.day,
+    ).add(const Duration(days: 1));
+    final rollups = await repo.categoryRollups(
+      bookId: bookId,
+      from: from,
+      to: to,
+    );
 
     final rows = <List<String>>[
       ['Category', 'Income', 'Expense', 'Net'],
-      ...rollups.map((r) => [
-            r.categoryName,
-            (r.incomeMinor / 100).toStringAsFixed(2),
-            (r.expenseMinor / 100).toStringAsFixed(2),
-            (r.netMinor / 100).toStringAsFixed(2),
-          ]),
+      ...rollups.map(
+        (r) => [
+          r.categoryName,
+          (r.incomeMinor / 100).toStringAsFixed(2),
+          (r.expenseMinor / 100).toStringAsFixed(2),
+          (r.netMinor / 100).toStringAsFixed(2),
+        ],
+      ),
     ];
     final csv = const ListToCsvConverter().convert(rows);
     final dir = await getTemporaryDirectory();
     final file = File('${dir.path}/bennet_tax_$bookId.csv');
     await file.writeAsString(csv);
-    await Share.shareXFiles([XFile(file.path)], subject: 'Bennet category summary CSV');
+    await Share.shareXFiles([
+      XFile(file.path),
+    ], subject: 'Bennet category summary CSV');
   }
 
   Future<void> _exportPdf(int bookId) async {
     final repo = await ref.read(ledgerRepositoryProvider.future);
-    final from = DateTime(_range.start.year, _range.start.month, _range.start.day);
-    final to = DateTime(_range.end.year, _range.end.month, _range.end.day)
-        .add(const Duration(days: 1));
-    final rollups = await repo.categoryRollups(bookId: bookId, from: from, to: to);
+    final from = DateTime(
+      _range.start.year,
+      _range.start.month,
+      _range.start.day,
+    );
+    final to = DateTime(
+      _range.end.year,
+      _range.end.month,
+      _range.end.day,
+    ).add(const Duration(days: 1));
+    final rollups = await repo.categoryRollups(
+      bookId: bookId,
+      from: from,
+      to: to,
+    );
     final business = await repo.getSetting('business_name');
 
     final doc = pw.Document();
@@ -78,8 +104,13 @@ class _TaxExportScreenState extends ConsumerState<TaxExportScreen> {
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
               pw.Text(
-                business?.trim().isNotEmpty == true ? business!.trim() : 'Bennet summary',
-                style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
+                business?.trim().isNotEmpty == true
+                    ? business!.trim()
+                    : 'Bennet summary',
+                style: pw.TextStyle(
+                  fontSize: 18,
+                  fontWeight: pw.FontWeight.bold,
+                ),
               ),
               pw.SizedBox(height: 8),
               pw.Text(
@@ -91,27 +122,35 @@ class _TaxExportScreenState extends ConsumerState<TaxExportScreen> {
                 children: [
                   pw.TableRow(
                     children: ['Category', 'Income', 'Expense', 'Net']
-                        .map((h) => pw.Padding(
-                              padding: const pw.EdgeInsets.all(4),
-                              child: pw.Text(h, style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-                            ))
+                        .map(
+                          (h) => pw.Padding(
+                            padding: const pw.EdgeInsets.all(4),
+                            child: pw.Text(
+                              h,
+                              style: pw.TextStyle(
+                                fontWeight: pw.FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        )
                         .toList(),
                   ),
                   ...rollups.map(
                     (r) => pw.TableRow(
-                      children: [
-                        r.categoryName,
-                        formatMoney(r.incomeMinor),
-                        formatMoney(r.expenseMinor),
-                        formatMoney(r.netMinor),
-                      ]
-                          .map(
-                            (cell) => pw.Padding(
-                              padding: const pw.EdgeInsets.all(4),
-                              child: pw.Text(cell),
-                            ),
-                          )
-                          .toList(),
+                      children:
+                          [
+                                r.categoryName,
+                                formatMoney(r.incomeMinor),
+                                formatMoney(r.expenseMinor),
+                                formatMoney(r.netMinor),
+                              ]
+                              .map(
+                                (cell) => pw.Padding(
+                                  padding: const pw.EdgeInsets.all(4),
+                                  child: pw.Text(cell),
+                                ),
+                              )
+                              .toList(),
                     ),
                   ),
                 ],
@@ -130,7 +169,9 @@ class _TaxExportScreenState extends ConsumerState<TaxExportScreen> {
     final dir = await getTemporaryDirectory();
     final file = File('${dir.path}/bennet_summary_$bookId.pdf');
     await file.writeAsBytes(bytes, flush: true);
-    await Share.shareXFiles([XFile(file.path)], subject: 'Bennet tax summary PDF');
+    await Share.shareXFiles([
+      XFile(file.path),
+    ], subject: 'Bennet tax summary PDF');
   }
 
   @override
@@ -138,8 +179,14 @@ class _TaxExportScreenState extends ConsumerState<TaxExportScreen> {
     final bookAsync = ref.watch(defaultBookProvider);
 
     return bookAsync.when(
-      loading: () => const BennetScaffold(title: 'Tax export', body: Center(child: CircularProgressIndicator())),
-      error: (e, _) => BennetScaffold(title: 'Tax export', body: Center(child: Text('$e'))),
+      loading: () => const BennetScaffold(
+        title: 'Tax export',
+        body: Center(child: CircularProgressIndicator()),
+      ),
+      error: (e, _) => BennetScaffold(
+        title: 'Tax export',
+        body: Center(child: Text('$e')),
+      ),
       data: (book) => BennetScaffold(
         title: 'Tax export',
         contentWidth: ContentWidthMode.narrow,
@@ -163,24 +210,22 @@ class _TaxExportScreenState extends ConsumerState<TaxExportScreen> {
             const SizedBox(height: 24),
             Align(
               alignment: Alignment.centerLeft,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 320),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    FilledButton.icon(
-                      onPressed: () => _exportCsv(book.id),
-                      icon: const Icon(Icons.table_chart_outlined),
-                      label: const Text('Export CSV'),
-                    ),
-                    const SizedBox(height: 12),
-                    OutlinedButton.icon(
-                      onPressed: () => _exportPdf(book.id),
-                      icon: const Icon(Icons.picture_as_pdf_outlined),
-                      label: const Text('Export PDF summary'),
-                    ),
-                  ],
-                ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  FilledButton.icon(
+                    onPressed: () => _exportCsv(book.id),
+                    icon: const Icon(Icons.table_chart_outlined),
+                    label: const Text('Export CSV'),
+                  ),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    onPressed: () => _exportPdf(book.id),
+                    icon: const Icon(Icons.picture_as_pdf_outlined),
+                    label: const Text('Export PDF summary'),
+                  ),
+                ],
               ),
             ),
           ],

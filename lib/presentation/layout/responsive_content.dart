@@ -14,6 +14,9 @@ enum ContentWidthMode {
   /// Forms and settings (~520).
   narrow,
 
+  /// Editing screens with paired fields (~720).
+  form,
+
   /// Lists and most screens (~960).
   standard,
 
@@ -22,18 +25,15 @@ enum ContentWidthMode {
 }
 
 double maxWidthFor(ContentWidthMode mode) => switch (mode) {
-      ContentWidthMode.narrow => 520,
-      ContentWidthMode.standard => 960,
-      ContentWidthMode.wide => 1200,
-    };
+  ContentWidthMode.narrow => 520,
+  ContentWidthMode.form => 720,
+  ContentWidthMode.standard => 960,
+  ContentWidthMode.wide => 1200,
+};
 
 /// Centers content and caps width for large viewports.
 class ResponsiveContent extends StatelessWidget {
-  const ResponsiveContent({
-    super.key,
-    required this.mode,
-    required this.child,
-  });
+  const ResponsiveContent({super.key, required this.mode, required this.child});
 
   final ContentWidthMode mode;
   final Widget child;

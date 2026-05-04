@@ -6,6 +6,7 @@ import '../../application/providers.dart';
 import '../../core/money.dart';
 import '../../core/period_math.dart';
 import '../../domain/entities.dart';
+import '../layout/responsive_content.dart';
 import '../widgets/app_scaffold.dart';
 
 class CashBookScreen extends ConsumerStatefulWidget {
@@ -92,87 +93,137 @@ class _CashBookScreenState extends ConsumerState<CashBookScreen> {
               );
               return BennetScaffold(
                 title: 'Cash book',
+                contentWidth: ContentWidthMode.wide,
                 actions: [
                   IconButton(
                     icon: const Icon(Icons.calendar_month),
                     onPressed: _pickMonth,
                   ),
                 ],
-                body: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 360),
+                body: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final useTable =
+                        constraints.maxWidth >= Breakpoints.expanded;
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
                           child: Text(
                             DateFormat.yMMMM().format(_month),
                             style: Theme.of(context).textTheme.titleMedium,
                           ),
                         ),
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 400),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
                           child: Text(
                             'Opening: ${formatMoney(opening)}',
                             style: Theme.of(context).textTheme.bodySmall,
                           ),
                         ),
-                      ),
-                    ),
-                    const Divider(),
-                    Expanded(
-                      child: sorted.isEmpty
-                          ? const Center(child: Text('No entries this month.'))
-                          : ListView.separated(
-                              itemCount: sorted.length,
-                              separatorBuilder: (_, _) =>
-                                  const Divider(height: 1),
-                              itemBuilder: (ctx, i) {
-                                final t = sorted[i];
-                                final bal = runs[i];
-                                return ListTile(
-                                  dense: true,
-                                  title: Text(t.categoryName ?? ''),
-                                  subtitle: Text(
-                                    '${DateFormat.yMMMd().format(t.occurredAt)} · ${t.type == TxType.income ? 'In' : 'Out'}',
-                                  ),
-                                  trailing: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    crossAxisAlignment: CrossAxisAlignment.end,
-                                    children: [
-                                      Text(
-                                        '${t.type == TxType.income ? '+' : '-'}${formatMoney(t.amountMinor)}',
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                      Text(
-                                        formatMoney(bal),
-                                        style: Theme.of(
-                                          context,
-                                        ).textTheme.bodySmall,
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              },
-                            ),
-                    ),
-                  ],
+                        const Divider(),
+                        Expanded(
+                          child: sorted.isEmpty
+                              ? const Center(
+                                  child: Text('No entries this month.'),
+                                )
+                              : useTable
+                              ? _cashTable(context, sorted, runs)
+                              : _cashList(context, sorted, runs),
+                        ),
+                      ],
+                    );
+                  },
                 ),
               );
             },
           ),
         );
       },
+    );
+  }
+
+  Widget _cashList(
+    BuildContext context,
+    List<LedgerTransaction> sorted,
+    List<int> runs,
+  ) {
+    return ListView.separated(
+      itemCount: sorted.length,
+      separatorBuilder: (_, _) => const Divider(height: 1),
+      itemBuilder: (ctx, i) {
+        final t = sorted[i];
+        final bal = runs[i];
+        return ListTile(
+          dense: true,
+          title: Text(t.categoryName ?? ''),
+          subtitle: Text(
+            '${DateFormat.yMMMd().format(t.occurredAt)} · ${t.type == TxType.income ? 'In' : 'Out'}',
+          ),
+          trailing: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                '${t.type == TxType.income ? '+' : '-'}${formatMoney(t.amountMinor)}',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+              Text(
+                formatMoney(bal),
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _cashTable(
+    BuildContext context,
+    List<LedgerTransaction> sorted,
+    List<int> runs,
+  ) {
+    return Scrollbar(
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+        child: SingleChildScrollView(
+          child: DataTable(
+            columnSpacing: 24,
+            columns: const [
+              DataColumn(label: Text('Date')),
+              DataColumn(label: Text('Type')),
+              DataColumn(label: Text('Category')),
+              DataColumn(label: Text('Account')),
+              DataColumn(label: Text('Amount'), numeric: true),
+              DataColumn(label: Text('Balance'), numeric: true),
+            ],
+            rows: [
+              for (var i = 0; i < sorted.length; i++)
+                DataRow(
+                  cells: [
+                    DataCell(
+                      Text(DateFormat.yMMMd().format(sorted[i].occurredAt)),
+                    ),
+                    DataCell(
+                      Text(sorted[i].type == TxType.income ? 'In' : 'Out'),
+                    ),
+                    DataCell(Text(sorted[i].categoryName ?? '')),
+                    DataCell(Text(sorted[i].accountName ?? '')),
+                    DataCell(
+                      Text(
+                        '${sorted[i].type == TxType.income ? '+' : '-'}${formatMoney(sorted[i].amountMinor)}',
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                    DataCell(Text(formatMoney(runs[i]))),
+                  ],
+                ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

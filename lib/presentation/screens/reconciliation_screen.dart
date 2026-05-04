@@ -327,7 +327,9 @@ class _ReconciliationScreenState extends ConsumerState<ReconciliationScreen> {
 
                       Widget linesList() {
                         if (lines.isEmpty) {
-                          return const Center(child: Text('No statement lines.'));
+                          return const Center(
+                            child: Text('No statement lines.'),
+                          );
                         }
                         return ListView.separated(
                           itemCount: lines.length,
@@ -404,10 +406,7 @@ class _ReconciliationScreenState extends ConsumerState<ReconciliationScreen> {
                                   ),
                                 ),
                                 const VerticalDivider(width: 1, thickness: 1),
-                                Expanded(
-                                  flex: 3,
-                                  child: linesList(),
-                                ),
+                                Expanded(flex: 3, child: linesList()),
                               ],
                             ),
                           ),

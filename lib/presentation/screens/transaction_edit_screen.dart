@@ -243,6 +243,7 @@ class _TransactionEditScreenState extends ConsumerState<TransactionEditScreen> {
             ),
             data: (categories) => BennetScaffold(
               title: _isNew ? 'New transaction' : 'Edit transaction',
+              contentWidth: ContentWidthMode.form,
               actions: [
                 if (!_isNew)
                   IconButton(
@@ -302,7 +303,8 @@ class _TransactionEditScreenState extends ConsumerState<TransactionEditScreen> {
                           ),
                         ],
                         selected: {_type},
-                        onSelectionChanged: (s) => setState(() => _type = s.first),
+                        onSelectionChanged: (s) =>
+                            setState(() => _type = s.first),
                       ),
                       const SizedBox(height: 16),
                       Align(
@@ -313,7 +315,9 @@ class _TransactionEditScreenState extends ConsumerState<TransactionEditScreen> {
                           ),
                           child: TextField(
                             controller: _amountCtrl,
-                            decoration: const InputDecoration(labelText: 'Amount'),
+                            decoration: const InputDecoration(
+                              labelText: 'Amount',
+                            ),
                             keyboardType: const TextInputType.numberWithOptions(
                               decimal: true,
                             ),

@@ -30,36 +30,51 @@ class AuthShell extends StatelessWidget {
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final contentWidth = math.min(maxFormWidth, constraints.maxWidth - 48);
+            final contentWidth = math.min(
+              maxFormWidth,
+              constraints.maxWidth - 48,
+            );
             return SingleChildScrollView(
               padding: const EdgeInsets.symmetric(horizontal: 24),
               child: ConstrainedBox(
                 constraints: BoxConstraints(minHeight: constraints.maxHeight),
                 child: Center(
                   child: ConstrainedBox(
-                    constraints: BoxConstraints(maxWidth: math.max(0, contentWidth)),
+                    constraints: BoxConstraints(
+                      maxWidth: math.max(0, contentWidth),
+                    ),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Icon(Icons.account_balance_wallet_outlined, size: 48, color: scheme.primary),
+                        Icon(
+                          Icons.account_balance_wallet_outlined,
+                          size: 48,
+                          color: scheme.primary,
+                        ),
                         const SizedBox(height: 16),
                         Text(
                           'Bennet',
                           textAlign: TextAlign.center,
-                          style: textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w600),
+                          style: textTheme.headlineMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                         const SizedBox(height: 8),
                         Text(
                           headline,
                           textAlign: TextAlign.center,
-                          style: textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w600),
+                          style: textTheme.headlineSmall?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                         const SizedBox(height: 4),
                         Text(
                           subtitle,
                           textAlign: TextAlign.center,
-                          style: textTheme.titleMedium?.copyWith(color: scheme.onSurfaceVariant),
+                          style: textTheme.titleMedium?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                          ),
                         ),
                         const SizedBox(height: 28),
                         formCard,
@@ -72,7 +87,9 @@ class AuthShell extends StatelessWidget {
                           Text(
                             footerText!,
                             textAlign: TextAlign.center,
-                            style: textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+                            style: textTheme.bodySmall?.copyWith(
+                              color: scheme.onSurfaceVariant,
+                            ),
                           ),
                         ],
                       ],

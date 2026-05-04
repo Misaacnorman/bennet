@@ -29,7 +29,10 @@ class BalanceSheetScreen extends ConsumerWidget {
                   DropdownButtonFormField<BalanceSection>(
                     initialValue: section,
                     items: BalanceSection.values
-                        .map((s) => DropdownMenuItem(value: s, child: Text(s.name)))
+                        .map(
+                          (s) =>
+                              DropdownMenuItem(value: s, child: Text(s.name)),
+                        )
                         .toList(),
                     onChanged: (v) =>
                         setSt(() => section = v ?? BalanceSection.asset),
@@ -140,6 +143,7 @@ class BalanceSheetScreen extends ConsumerWidget {
 
               return BennetScaffold(
                 title: 'Balance sheet',
+                contentWidth: ContentWidthMode.wide,
                 fab: FloatingActionButton(
                   onPressed: () => _addItem(context, ref, book.id),
                   child: const Icon(Icons.add),
@@ -178,7 +182,9 @@ class BalanceSheetScreen extends ConsumerWidget {
                           'Assets subtotal: ${formatMoney(sumOf(assets))}',
                           style: Theme.of(context).textTheme.bodyMedium,
                         ),
-                        Text('Liabilities subtotal: ${formatMoney(sumOf(lia))}'),
+                        Text(
+                          'Liabilities subtotal: ${formatMoney(sumOf(lia))}',
+                        ),
                         Text('Equity subtotal: ${formatMoney(sumOf(eq))}'),
                       ],
                     );
@@ -191,8 +197,20 @@ class BalanceSheetScreen extends ConsumerWidget {
                           const SizedBox(height: 8),
                           bookCard,
                           const SizedBox(height: 24),
-                          _section(context, 'Manual assets', assets, ref, book.id),
-                          _section(context, 'Manual liabilities', lia, ref, book.id),
+                          _section(
+                            context,
+                            'Manual assets',
+                            assets,
+                            ref,
+                            book.id,
+                          ),
+                          _section(
+                            context,
+                            'Manual liabilities',
+                            lia,
+                            ref,
+                            book.id,
+                          ),
                           _section(context, 'Manual equity', eq, ref, book.id),
                           footer,
                         ],

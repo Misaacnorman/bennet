@@ -5,13 +5,15 @@ import 'package:intl/intl.dart';
 
 import '../../application/providers.dart';
 import '../../core/money.dart';
+import '../layout/responsive_content.dart';
 import '../widgets/app_scaffold.dart';
 
 class MonthlySummaryScreen extends ConsumerStatefulWidget {
   const MonthlySummaryScreen({super.key});
 
   @override
-  ConsumerState<MonthlySummaryScreen> createState() => _MonthlySummaryScreenState();
+  ConsumerState<MonthlySummaryScreen> createState() =>
+      _MonthlySummaryScreenState();
 }
 
 class _MonthlySummaryScreenState extends ConsumerState<MonthlySummaryScreen> {
@@ -35,8 +37,16 @@ class _MonthlySummaryScreenState extends ConsumerState<MonthlySummaryScreen> {
   Future<void> _refreshOpeningField() async {
     final repo = await ref.read(ledgerRepositoryProvider.future);
     final book = await repo.defaultBook();
-    final explicit = await repo.getOpeningMinor(book.id, _month.year, _month.month);
-    final resolved = await repo.resolveOpeningMinor(book.id, _month.year, _month.month);
+    final explicit = await repo.getOpeningMinor(
+      book.id,
+      _month.year,
+      _month.month,
+    );
+    final resolved = await repo.resolveOpeningMinor(
+      book.id,
+      _month.year,
+      _month.month,
+    );
     if (!mounted) return;
     if (explicit != null) {
       _openingCtrl.text = (explicit / 100).toStringAsFixed(2);
@@ -65,14 +75,20 @@ class _MonthlySummaryScreenState extends ConsumerState<MonthlySummaryScreen> {
   Future<void> _saveOpening() async {
     final minor = parseMoneyInput(_openingCtrl.text);
     if (minor == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Invalid opening balance.')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Invalid opening balance.')));
       return;
     }
     final repo = await ref.read(ledgerRepositoryProvider.future);
     final book = await repo.defaultBook();
     await repo.setOpeningMinor(book.id, _month.year, _month.month, minor);
     invalidateLedger(ref);
-    if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Opening balance saved.')));
+    if (mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Opening balance saved.')));
+    }
   }
 
   @override
@@ -80,25 +96,47 @@ class _MonthlySummaryScreenState extends ConsumerState<MonthlySummaryScreen> {
     final bookAsync = ref.watch(defaultBookProvider);
 
     return bookAsync.when(
-      loading: () => const BennetScaffold(title: 'Monthly summary', body: Center(child: CircularProgressIndicator())),
-      error: (e, _) => BennetScaffold(title: 'Monthly summary', body: Center(child: Text('$e'))),
+      loading: () => const BennetScaffold(
+        title: 'Monthly summary',
+        body: Center(child: CircularProgressIndicator()),
+      ),
+      error: (e, _) => BennetScaffold(
+        title: 'Monthly summary',
+        body: Center(child: Text('$e')),
+      ),
       data: (book) {
         final summaryAsync = ref.watch(
-          monthlySummaryProvider((bookId: book.id, year: _month.year, month: _month.month)),
+          monthlySummaryProvider((
+            bookId: book.id,
+            year: _month.year,
+            month: _month.month,
+          )),
         );
         return summaryAsync.when(
-          loading: () =>
-              const BennetScaffold(title: 'Monthly summary', body: Center(child: CircularProgressIndicator())),
-          error: (e, _) => BennetScaffold(title: 'Monthly summary', body: Center(child: Text('$e'))),
+          loading: () => const BennetScaffold(
+            title: 'Monthly summary',
+            body: Center(child: CircularProgressIndicator()),
+          ),
+          error: (e, _) => BennetScaffold(
+            title: 'Monthly summary',
+            body: Center(child: Text('$e')),
+          ),
           data: (s) => BennetScaffold(
             title: 'Monthly summary',
+            contentWidth: ContentWidthMode.form,
             actions: [
-              IconButton(icon: const Icon(Icons.calendar_month), onPressed: _pickMonth),
+              IconButton(
+                icon: const Icon(Icons.calendar_month),
+                onPressed: _pickMonth,
+              ),
             ],
             body: ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                Text(DateFormat.yMMMM().format(_month), style: Theme.of(context).textTheme.titleLarge),
+                Text(
+                  DateFormat.yMMMM().format(_month),
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
                 const SizedBox(height: 16),
                 Align(
                   alignment: Alignment.centerLeft,
@@ -111,15 +149,24 @@ class _MonthlySummaryScreenState extends ConsumerState<MonthlySummaryScreen> {
                           controller: _openingCtrl,
                           decoration: const InputDecoration(
                             labelText: 'Opening balance (edit & save)',
-                            helperText: 'Stored opening for this month; affects closing.',
+                            helperText:
+                                'Stored opening for this month; affects closing.',
                           ),
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                            signed: true,
+                          ),
                           inputFormatters: [
-                            FilteringTextInputFormatter.allow(RegExp(r'^-?\d*\.?\d{0,2}')),
+                            FilteringTextInputFormatter.allow(
+                              RegExp(r'^-?\d*\.?\d{0,2}'),
+                            ),
                           ],
                         ),
                         const SizedBox(height: 8),
-                        OutlinedButton(onPressed: _saveOpening, child: const Text('Save opening balance')),
+                        OutlinedButton(
+                          onPressed: _saveOpening,
+                          child: const Text('Save opening balance'),
+                        ),
                       ],
                     ),
                   ),
@@ -134,9 +181,16 @@ class _MonthlySummaryScreenState extends ConsumerState<MonthlySummaryScreen> {
                       children: [
                         _row('Opening balance', formatMoney(s.openingMinor)),
                         _row('Total income', formatMoney(s.totalIncomeMinor)),
-                        _row('Total expenses', formatMoney(s.totalExpenseMinor)),
+                        _row(
+                          'Total expenses',
+                          formatMoney(s.totalExpenseMinor),
+                        ),
                         _row('Profit / loss', formatMoney(s.netMinor)),
-                        _row('Closing balance', formatMoney(s.closingMinor), emphasize: true),
+                        _row(
+                          'Closing balance',
+                          formatMoney(s.closingMinor),
+                          emphasize: true,
+                        ),
                       ],
                     ),
                   ),
@@ -158,7 +212,9 @@ class _MonthlySummaryScreenState extends ConsumerState<MonthlySummaryScreen> {
           Text(label),
           Text(
             value,
-            style: TextStyle(fontWeight: emphasize ? FontWeight.bold : FontWeight.w500),
+            style: TextStyle(
+              fontWeight: emphasize ? FontWeight.bold : FontWeight.w500,
+            ),
           ),
         ],
       ),

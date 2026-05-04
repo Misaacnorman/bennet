@@ -104,7 +104,9 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
                   onSelectChanged: (_) => context.go('/transactions/${t.id}'),
                   cells: [
                     DataCell(Text(DateFormat.yMMMd().format(t.occurredAt))),
-                    DataCell(Text(t.type == TxType.income ? 'Income' : 'Expense')),
+                    DataCell(
+                      Text(t.type == TxType.income ? 'Income' : 'Expense'),
+                    ),
                     DataCell(Text(t.categoryName ?? '')),
                     DataCell(Text(t.accountName ?? '')),
                     DataCell(
@@ -159,6 +161,7 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
           ),
           data: (txs) => BennetScaffold(
             title: 'Transactions',
+            contentWidth: ContentWidthMode.wide,
             fab: FloatingActionButton(
               onPressed: () => context.go('/transactions/new'),
               child: const Icon(Icons.add),
@@ -176,28 +179,30 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 400),
-                      child: Text(
-                        DateFormat.yMMMM().format(_month),
-                        style: Theme.of(context).textTheme.titleMedium,
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 400),
+                          child: Text(
+                            DateFormat.yMMMM().format(_month),
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                        ),
                       ),
                     ),
-                  ),
-                ),
                     Expanded(
                       child: txs.isEmpty
-                          ? const Center(child: Text('No transactions this month.'))
+                          ? const Center(
+                              child: Text('No transactions this month.'),
+                            )
                           : useTable
-                              ? Padding(
-                                  padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-                                  child: _dataTable(context, txs),
-                                )
-                              : _listView(context, txs),
+                          ? Padding(
+                              padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                              child: _dataTable(context, txs),
+                            )
+                          : _listView(context, txs),
                     ),
                   ],
                 );

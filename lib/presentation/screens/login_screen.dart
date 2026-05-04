@@ -96,7 +96,9 @@ class _LoginScreenState extends State<LoginScreen> {
         children: [
           Text(
             'New to Bennet? ',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
           ),
           TextButton(
             onPressed: _busy ? null : () => context.go('/signup'),
