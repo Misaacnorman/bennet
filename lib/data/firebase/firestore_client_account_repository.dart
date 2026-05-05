@@ -296,9 +296,7 @@ class FirestoreClientAccountRepository implements ClientAccountRepository {
     final ref = _clients.doc('${input.id}');
     final snap = await ref.get();
     if (!snap.exists) throw StateError('Client not found');
-    final data = <String, dynamic>{
-      'updatedAt': FieldValue.serverTimestamp(),
-    };
+    final data = <String, dynamic>{'updatedAt': FieldValue.serverTimestamp()};
     if (input.displayName != null) {
       data['displayName'] = input.displayName!.trim();
     }
@@ -318,7 +316,9 @@ class FirestoreClientAccountRepository implements ClientAccountRepository {
       data['openingBalanceMinor'] = input.openingBalanceMinor;
     }
     if (input.openingBalanceDate != null) {
-      data['openingBalanceDate'] = Timestamp.fromDate(input.openingBalanceDate!);
+      data['openingBalanceDate'] = Timestamp.fromDate(
+        input.openingBalanceDate!,
+      );
     }
     if (input.defaultCategoryId != null) {
       data['defaultCategoryId'] = input.defaultCategoryId;
@@ -349,12 +349,16 @@ class FirestoreClientAccountRepository implements ClientAccountRepository {
   }
 
   Future<List<ClientAdjustment>> _adjustmentsForClient(int clientId) async {
-    final snap = await _adjustments.where('clientId', isEqualTo: clientId).get();
+    final snap = await _adjustments
+        .where('clientId', isEqualTo: clientId)
+        .get();
     return snap.docs.map(_adjFromDoc).toList();
   }
 
   Future<Map<int, int>> _allocationsByChargeForClient(int clientId) async {
-    final snap = await _allocations.where('clientId', isEqualTo: clientId).get();
+    final snap = await _allocations
+        .where('clientId', isEqualTo: clientId)
+        .get();
     final map = <int, int>{};
     for (final d in snap.docs) {
       final a = _allocFromDoc(d);
@@ -371,13 +375,97 @@ class FirestoreClientAccountRepository implements ClientAccountRepository {
 
   @override
   Future<ClientAccountSummary> clientSummary(int clientId) async {
-    final client = await getClient(clientId);
-    if (client == null) throw StateError('Client not found');
-    final charges = await _chargesForClient(clientId);
-    final payments = await _paymentsForClient(clientId);
-    final adjustments = await _adjustmentsForClient(clientId);
-    final allocByCharge = await _allocationsByChargeForClient(clientId);
+    final results = await Future.wait<Object?>([
+      getClient(clientId),
+      _chargesForClient(clientId),
+      _paymentsForClient(clientId),
+      _adjustmentsForClient(clientId),
+      _allocationsByChargeForClient(clientId),
+    ]);
 
+    final client = results[0] as Client?;
+    if (client == null) throw StateError('Client not found');
+    final charges = results[1] as List<ClientCharge>;
+    final payments = results[2] as List<ClientPayment>;
+    final adjustments = results[3] as List<ClientAdjustment>;
+    final allocByCharge = results[4] as Map<int, int>;
+
+    return _summaryFromData(
+      client: client,
+      charges: charges,
+      payments: payments,
+      adjustments: adjustments,
+      allocByCharge: allocByCharge,
+    );
+  }
+
+  @override
+  Future<List<ClientAccountSummary>> listClientSummaries({
+    ClientStatus? status,
+    String? query,
+  }) async {
+    final clients = await listClients(status: status, query: query);
+    if (clients.isEmpty) return const [];
+
+    final selectedIds = clients.map((c) => c.id).toSet();
+    final results = await Future.wait<QuerySnapshot<Map<String, dynamic>>>([
+      _charges.get(),
+      _payments.get(),
+      _adjustments.get(),
+      _allocations.get(),
+    ]);
+
+    final chargesByClient = <int, List<ClientCharge>>{};
+    for (final doc in results[0].docs) {
+      final charge = _chargeFromDoc(doc);
+      if (!selectedIds.contains(charge.clientId)) continue;
+      (chargesByClient[charge.clientId] ??= []).add(charge);
+    }
+
+    final paymentsByClient = <int, List<ClientPayment>>{};
+    for (final doc in results[1].docs) {
+      final payment = _paymentFromDoc(doc);
+      if (!selectedIds.contains(payment.clientId)) continue;
+      (paymentsByClient[payment.clientId] ??= []).add(payment);
+    }
+
+    final adjustmentsByClient = <int, List<ClientAdjustment>>{};
+    for (final doc in results[2].docs) {
+      final adjustment = _adjFromDoc(doc);
+      if (!selectedIds.contains(adjustment.clientId)) continue;
+      (adjustmentsByClient[adjustment.clientId] ??= []).add(adjustment);
+    }
+
+    final allocationsByClient = <int, Map<int, int>>{};
+    for (final doc in results[3].docs) {
+      final data = doc.data();
+      final clientId = (data['clientId'] as num).toInt();
+      if (!selectedIds.contains(clientId)) continue;
+      final allocation = _allocFromDoc(doc);
+      final allocByCharge = allocationsByClient[clientId] ??= {};
+      allocByCharge[allocation.chargeId] =
+          (allocByCharge[allocation.chargeId] ?? 0) + allocation.amountMinor;
+    }
+
+    return [
+      for (final client in clients)
+        _summaryFromData(
+          client: client,
+          charges: chargesByClient[client.id] ?? const [],
+          payments: paymentsByClient[client.id] ?? const [],
+          adjustments: adjustmentsByClient[client.id] ?? const [],
+          allocByCharge: allocationsByClient[client.id] ?? const {},
+        ),
+    ];
+  }
+
+  ClientAccountSummary _summaryFromData({
+    required Client client,
+    required List<ClientCharge> charges,
+    required List<ClientPayment> payments,
+    required List<ClientAdjustment> adjustments,
+    required Map<int, int> allocByCharge,
+  }) {
     var chargeTotal = 0;
     var outstanding = 0;
     var openCount = 0;
@@ -411,10 +499,7 @@ class FirestoreClientAccountRepository implements ClientAccountRepository {
     }
 
     final balance =
-        client.openingBalanceMinor +
-        chargeTotal -
-        paymentTotal +
-        adjEffect;
+        client.openingBalanceMinor + chargeTotal - paymentTotal + adjEffect;
 
     return ClientAccountSummary(
       client: client,
@@ -431,12 +516,18 @@ class FirestoreClientAccountRepository implements ClientAccountRepository {
     DateTime? from,
     DateTime? to,
   }) async {
-    final client = await getClient(clientId);
-    if (client == null) throw StateError('Client not found');
+    final results = await Future.wait<Object?>([
+      getClient(clientId),
+      _chargesForClient(clientId),
+      _paymentsForClient(clientId),
+      _adjustmentsForClient(clientId),
+    ]);
 
-    final charges = await _chargesForClient(clientId);
-    final payments = await _paymentsForClient(clientId);
-    final adjustments = await _adjustmentsForClient(clientId);
+    final client = results[0] as Client?;
+    if (client == null) throw StateError('Client not found');
+    final charges = results[1] as List<ClientCharge>;
+    final payments = results[2] as List<ClientPayment>;
+    final adjustments = results[3] as List<ClientAdjustment>;
 
     final rows = <_LedgerSortRow>[];
 
@@ -613,12 +704,15 @@ class FirestoreClientAccountRepository implements ClientAccountRepository {
   }
 
   @override
-  Future<List<({ClientCharge charge, int openMinor})>> listChargesWithOpenAmount(
-    int clientId,
-  ) async {
+  Future<List<({ClientCharge charge, int openMinor})>>
+  listChargesWithOpenAmount(int clientId) async {
     await _ensureMeta();
-    final charges = await _chargesForClient(clientId);
-    final allocByCharge = await _allocationsByChargeForClient(clientId);
+    final results = await Future.wait<Object>([
+      _chargesForClient(clientId),
+      _allocationsByChargeForClient(clientId),
+    ]);
+    final charges = results[0] as List<ClientCharge>;
+    final allocByCharge = results[1] as Map<int, int>;
     final out = <({ClientCharge charge, int openMinor})>[];
     for (final c in charges) {
       if (c.status == ChargeStatus.voided) continue;
@@ -698,8 +792,7 @@ class FirestoreClientAccountRepository implements ClientAccountRepository {
         final metaSnap = await txn.get(_metaClient);
         final data = metaSnap.data()!;
         paymentId = (data['nextPaymentId'] as num?)?.toInt() ?? 1;
-        final receiptNumber =
-            (data['nextReceiptNumber'] as num?)?.toInt() ?? 1;
+        final receiptNumber = (data['nextReceiptNumber'] as num?)?.toInt() ?? 1;
         var nextAllocId = (data['nextAllocationId'] as num?)?.toInt() ?? 1;
 
         txn.set(_metaClient, {
@@ -741,8 +834,12 @@ class FirestoreClientAccountRepository implements ClientAccountRepository {
       rethrow;
     }
 
-    final saved = await getPayment(paymentId);
-    final allocsSaved = await listAllocationsForPayment(paymentId);
+    final savedResults = await Future.wait<Object?>([
+      getPayment(paymentId),
+      listAllocationsForPayment(paymentId),
+    ]);
+    final saved = savedResults[0] as ClientPayment?;
+    final allocsSaved = savedResults[1] as List<PaymentAllocation>;
     if (saved != null) {
       await _persistReceiptDoc(
         paymentId: paymentId,
@@ -766,10 +863,9 @@ class FirestoreClientAccountRepository implements ClientAccountRepository {
       'reversalReason': reason.trim(),
     });
 
-    await _receipts.doc('$paymentId').set(
-      {'paymentReversed': true},
-      SetOptions(merge: true),
-    );
+    await _receipts.doc('$paymentId').set({
+      'paymentReversed': true,
+    }, SetOptions(merge: true));
 
     final ledgerId = p.ledgerTransactionId;
     if (ledgerId != null) {
@@ -799,10 +895,15 @@ class FirestoreClientAccountRepository implements ClientAccountRepository {
 
     final p = await getPayment(paymentId);
     if (p == null) throw StateError('Payment not found');
-    final client = await getClient(p.clientId);
+    final results = await Future.wait<Object?>([
+      getClient(p.clientId),
+      listAllocationsForPayment(paymentId),
+      _ledger.getSetting('business_name'),
+    ]);
+    final client = results[0] as Client?;
     if (client == null) throw StateError('Client not found');
-    final allocs = await listAllocationsForPayment(paymentId);
-    final bn = await _ledger.getSetting('business_name');
+    final allocs = results[1] as List<PaymentAllocation>;
+    final bn = results[2] as String?;
     final rn = p.receiptNumber ?? paymentId;
     return ReceiptDocument(
       paymentId: paymentId,
@@ -817,19 +918,20 @@ class FirestoreClientAccountRepository implements ClientAccountRepository {
       reference: p.reference,
       notes: p.notes,
       allocations: [
-        for (final a in allocs) (chargeId: a.chargeId, amountMinor: a.amountMinor),
+        for (final a in allocs)
+          (chargeId: a.chargeId, amountMinor: a.amountMinor),
       ],
       paymentReversed: p.status == PaymentStatus.reversed,
     );
   }
 
-  Future<int> _balanceBeforeStartOfDay(int clientId, DateTime day) async {
-    final client = await getClient(clientId);
-    if (client == null) throw StateError('Client not found');
-    final charges = await _chargesForClient(clientId);
-    final payments = await _paymentsForClient(clientId);
-    final adjustments = await _adjustmentsForClient(clientId);
-
+  int _balanceBeforeStartOfDay({
+    required Client client,
+    required List<ClientCharge> charges,
+    required List<ClientPayment> payments,
+    required List<ClientAdjustment> adjustments,
+    required DateTime day,
+  }) {
     final boundary = DateTime(day.year, day.month, day.day);
     final openD = client.openingBalanceDate ?? client.createdAt;
     final openDay = DateTime(openD.year, openD.month, openD.day);
@@ -861,11 +963,7 @@ class FirestoreClientAccountRepository implements ClientAccountRepository {
   Future<StatementPreview> buildStatementPreview(
     BuildStatementInput input,
   ) async {
-    final client = await getClient(input.clientId);
-    if (client == null) throw StateError('Client not found');
-    if (!input.toDate.isBefore(input.fromDate)) {
-      // ok
-    } else {
+    if (input.toDate.isBefore(input.fromDate)) {
       throw ArgumentError('date range');
     }
 
@@ -883,14 +981,27 @@ class FirestoreClientAccountRepository implements ClientAccountRepository {
       input.toDate.day,
     );
 
-    final opening = await _balanceBeforeStartOfDay(input.clientId, fromDay);
+    final results = await Future.wait<Object?>([
+      getClient(input.clientId),
+      _chargesForClient(input.clientId),
+      _paymentsForClient(input.clientId),
+      _adjustmentsForClient(input.clientId),
+    ]);
 
-    final charges = await _chargesForClient(input.clientId);
-    final payments = await _paymentsForClient(input.clientId);
-    final adjustments = await _adjustmentsForClient(input.clientId);
+    final client = results[0] as Client?;
+    if (client == null) throw StateError('Client not found');
+    final charges = results[1] as List<ClientCharge>;
+    final payments = results[2] as List<ClientPayment>;
+    final adjustments = results[3] as List<ClientAdjustment>;
+    final opening = _balanceBeforeStartOfDay(
+      client: client,
+      charges: charges,
+      payments: payments,
+      adjustments: adjustments,
+      day: fromDay,
+    );
 
-    final events =
-        <({DateTime at, String label, String? detail, int delta})>[];
+    final events = <({DateTime at, String label, String? detail, int delta})>[];
     for (final c in charges) {
       if (c.status == ChargeStatus.voided) continue;
       events.add((
@@ -991,19 +1102,22 @@ class FirestoreClientAccountRepository implements ClientAccountRepository {
 
   @override
   Future<OverviewMetrics> overviewMetrics() async {
-    await _ensureMeta();
-    final clients = await listClients(status: ClientStatus.active);
+    final results = await Future.wait<Object>([
+      listClientSummaries(status: ClientStatus.active),
+      listPayments(status: PaymentStatus.posted),
+    ]);
+    final summaries = results[0] as List<ClientAccountSummary>;
+    final pays = results[1] as List<ClientPayment>;
+
     var totalBal = 0;
     var openCharges = 0;
     var overdue = 0;
-    for (final c in clients) {
-      final s = await clientSummary(c.id);
+    for (final s in summaries) {
       totalBal += s.balanceMinor;
       openCharges += s.outstandingChargesMinor;
       overdue += s.overdueOpenChargeCount;
     }
 
-    final pays = await listPayments(status: PaymentStatus.posted);
     final cutoff = DateTime.now().subtract(const Duration(days: 30));
     var last30 = 0;
     for (final p in pays) {
@@ -1015,7 +1129,7 @@ class FirestoreClientAccountRepository implements ClientAccountRepository {
       openChargesTotalMinor: openCharges,
       overdueOpenChargeCount: overdue,
       postedPaymentsLast30DaysMinor: last30,
-      activeClientCount: clients.length,
+      activeClientCount: summaries.length,
     );
   }
 }

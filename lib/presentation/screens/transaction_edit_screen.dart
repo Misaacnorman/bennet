@@ -57,14 +57,22 @@ class _TransactionEditScreenState extends ConsumerState<TransactionEditScreen> {
 
   Future<void> _load() async {
     final repo = await ref.read(ledgerRepositoryProvider.future);
-    final book = await repo.defaultBook();
-    final accounts = await repo.listAccounts(book.id);
-    final categories = await repo.listCategories();
+    final book = await ref.read(defaultBookProvider.future);
+    final txFuture = widget.transactionId != null
+        ? repo.getTransaction(widget.transactionId!)
+        : Future<LedgerTransaction?>.value();
+    final results = await Future.wait<Object?>([
+      ref.read(accountsProvider(book.id).future),
+      ref.read(categoriesProvider.future),
+      txFuture,
+    ]);
+    final accounts = results[0] as List<Account>;
+    final categories = results[1] as List<Category>;
+    final tx = results[2] as LedgerTransaction?;
     if (!mounted) return;
 
     if (widget.transactionId != null) {
-      final tx = await repo.getTransaction(widget.transactionId!);
-      if (tx != null && mounted) {
+      if (tx != null) {
         _type = tx.type;
         _date = tx.occurredAt;
         _categoryId = tx.categoryId;

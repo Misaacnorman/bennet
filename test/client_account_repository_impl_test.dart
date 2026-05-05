@@ -93,59 +93,104 @@ void main() {
       );
     });
 
-    test('recordPayment persists allocations and unallocated remainder', () async {
-      final cid = await repo.createClient(
-        const CreateClientInput(displayName: 'Gamma', clientCode: 'GAM'),
-      );
-      final chg = await repo.createCharge(
-        CreateChargeInput(
-          clientId: cid,
-          amountMinor: 10_000,
-          issuedAt: DateTime.utc(2026, 4, 1),
-        ),
-      );
-      final pid = await repo.recordPayment(
-        RecordPaymentInput(
-          clientId: cid,
-          amountMinor: 4000,
-          receivedAt: DateTime.utc(2026, 4, 10),
-          method: PaymentMethod.bankTransfer,
-          accountId: 1,
-          categoryId: 1,
-          allocations: [
-            PaymentAllocationInput(chargeId: chg, amountMinor: 2500),
-          ],
-          syncLedgerIncome: false,
-        ),
-      );
-      final p = await repo.getPayment(pid);
-      expect(p!.unallocatedMinor, 1500);
-      final allocs = await repo.listAllocationsForPayment(pid);
-      expect(allocs, hasLength(1));
-      expect(allocs.single.amountMinor, 2500);
-      expect(allocs.single.chargeId, chg);
+    test(
+      'recordPayment persists allocations and unallocated remainder',
+      () async {
+        final cid = await repo.createClient(
+          const CreateClientInput(displayName: 'Gamma', clientCode: 'GAM'),
+        );
+        final chg = await repo.createCharge(
+          CreateChargeInput(
+            clientId: cid,
+            amountMinor: 10_000,
+            issuedAt: DateTime.utc(2026, 4, 1),
+          ),
+        );
+        final pid = await repo.recordPayment(
+          RecordPaymentInput(
+            clientId: cid,
+            amountMinor: 4000,
+            receivedAt: DateTime.utc(2026, 4, 10),
+            method: PaymentMethod.bankTransfer,
+            accountId: 1,
+            categoryId: 1,
+            allocations: [
+              PaymentAllocationInput(chargeId: chg, amountMinor: 2500),
+            ],
+            syncLedgerIncome: false,
+          ),
+        );
+        final p = await repo.getPayment(pid);
+        expect(p!.unallocatedMinor, 1500);
+        final allocs = await repo.listAllocationsForPayment(pid);
+        expect(allocs, hasLength(1));
+        expect(allocs.single.amountMinor, 2500);
+        expect(allocs.single.chargeId, chg);
 
-      final open = await repo.listChargesWithOpenAmount(cid);
-      expect(open, hasLength(1));
-      expect(open.single.openMinor, 7500);
-    });
+        final open = await repo.listChargesWithOpenAmount(cid);
+        expect(open, hasLength(1));
+        expect(open.single.openMinor, 7500);
+      },
+    );
 
-    test('clientSummary balance matches charges minus payments plus adjustments',
-        () async {
-      final cid = await repo.createClient(
-        const CreateClientInput(displayName: 'Delta', clientCode: 'DLT'),
+    test(
+      'clientSummary balance matches charges minus payments plus adjustments',
+      () async {
+        final cid = await repo.createClient(
+          const CreateClientInput(displayName: 'Delta', clientCode: 'DLT'),
+        );
+        await repo.createCharge(
+          CreateChargeInput(
+            clientId: cid,
+            amountMinor: 8000,
+            issuedAt: DateTime.utc(2026, 5, 1),
+          ),
+        );
+        await repo.recordPayment(
+          RecordPaymentInput(
+            clientId: cid,
+            amountMinor: 3000,
+            receivedAt: DateTime.utc(2026, 5, 2),
+            method: PaymentMethod.cash,
+            accountId: 1,
+            categoryId: 1,
+            syncLedgerIncome: false,
+          ),
+        );
+        await repo.createAdjustment(
+          CreateClientAdjustmentInput(
+            clientId: cid,
+            kind: AdjustmentKind.increase,
+            amountMinor: 500,
+            effectiveAt: DateTime.utc(2026, 5, 3),
+            reason: 'fee',
+          ),
+        );
+
+        final s = await repo.clientSummary(cid);
+        expect(s.balanceMinor, 8000 - 3000 + 500);
+        expect(s.outstandingChargesMinor, 8000);
+      },
+    );
+
+    test('listClientSummaries loads balances for the directory', () async {
+      final alpha = await repo.createClient(
+        const CreateClientInput(displayName: 'Alpha', clientCode: 'ALP'),
+      );
+      final beta = await repo.createClient(
+        const CreateClientInput(displayName: 'Beta', clientCode: 'BET'),
       );
       await repo.createCharge(
         CreateChargeInput(
-          clientId: cid,
-          amountMinor: 8000,
+          clientId: alpha,
+          amountMinor: 5000,
           issuedAt: DateTime.utc(2026, 5, 1),
         ),
       );
       await repo.recordPayment(
         RecordPaymentInput(
-          clientId: cid,
-          amountMinor: 3000,
+          clientId: beta,
+          amountMinor: 1200,
           receivedAt: DateTime.utc(2026, 5, 2),
           method: PaymentMethod.cash,
           accountId: 1,
@@ -153,19 +198,12 @@ void main() {
           syncLedgerIncome: false,
         ),
       );
-      await repo.createAdjustment(
-        CreateClientAdjustmentInput(
-          clientId: cid,
-          kind: AdjustmentKind.increase,
-          amountMinor: 500,
-          effectiveAt: DateTime.utc(2026, 5, 3),
-          reason: 'fee',
-        ),
-      );
 
-      final s = await repo.clientSummary(cid);
-      expect(s.balanceMinor, 8000 - 3000 + 500);
-      expect(s.outstandingChargesMinor, 8000);
+      final summaries = await repo.listClientSummaries();
+      final byClient = {for (final s in summaries) s.client.id: s};
+
+      expect(byClient[alpha]!.balanceMinor, 5000);
+      expect(byClient[beta]!.balanceMinor, -1200);
     });
 
     test('reversed payment excluded from balance', () async {
@@ -194,6 +232,41 @@ void main() {
 
       await repo.reversePayment(pid, 'test reversal');
       expect((await repo.clientSummary(cid)).balanceMinor, 6000);
+    });
+
+    test('overviewMetrics uses aggregate loading', () async {
+      final cid = await repo.createClient(
+        const CreateClientInput(displayName: 'Theta', clientCode: 'THA'),
+      );
+      final chargeId = await repo.createCharge(
+        CreateChargeInput(
+          clientId: cid,
+          amountMinor: 7000,
+          issuedAt: DateTime.utc(2026, 6, 1),
+          dueDate: DateTime.utc(2026, 6, 10),
+        ),
+      );
+      await repo.recordPayment(
+        RecordPaymentInput(
+          clientId: cid,
+          amountMinor: 2000,
+          receivedAt: DateTime.now(),
+          method: PaymentMethod.cash,
+          accountId: 1,
+          categoryId: 1,
+          allocations: [
+            PaymentAllocationInput(chargeId: chargeId, amountMinor: 1000),
+          ],
+          syncLedgerIncome: false,
+        ),
+      );
+
+      final metrics = await repo.overviewMetrics();
+
+      expect(metrics.activeClientCount, 1);
+      expect(metrics.totalBalanceMinor, 5000);
+      expect(metrics.openChargesTotalMinor, 6000);
+      expect(metrics.postedPaymentsLast30DaysMinor, 2000);
     });
 
     test('statement preview running balance and closing', () async {

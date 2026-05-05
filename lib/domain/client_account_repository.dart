@@ -13,16 +13,18 @@ abstract class ClientAccountRepository {
 
   Future<ClientAccountSummary> clientSummary(int clientId);
 
+  Future<List<ClientAccountSummary>> listClientSummaries({
+    ClientStatus? status,
+    String? query,
+  });
+
   Future<List<ClientLedgerLine>> clientLedger(
     int clientId, {
     DateTime? from,
     DateTime? to,
   });
 
-  Future<List<ClientCharge>> listCharges({
-    int? clientId,
-    ChargeStatus? status,
-  });
+  Future<List<ClientCharge>> listCharges({int? clientId, ChargeStatus? status});
 
   Future<ClientCharge?> getCharge(int id);
 
@@ -35,9 +37,8 @@ abstract class ClientAccountRepository {
   Future<List<ClientAdjustment>> listAdjustments(int clientId);
 
   /// Open (non-voided) charges with remaining collectible minor after allocations.
-  Future<List<({ClientCharge charge, int openMinor})>> listChargesWithOpenAmount(
-    int clientId,
-  );
+  Future<List<({ClientCharge charge, int openMinor})>>
+  listChargesWithOpenAmount(int clientId);
 
   Future<List<ClientPayment>> listPayments({
     int? clientId,

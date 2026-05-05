@@ -198,12 +198,7 @@ class ClientAccountRepositoryImpl implements ClientAccountRepository {
     if (input.defaultAccountId != null) {
       data['default_account_id'] = input.defaultAccountId;
     }
-    await _db.update(
-      'clients',
-      data,
-      where: 'id = ?',
-      whereArgs: [input.id],
-    );
+    await _db.update('clients', data, where: 'id = ?', whereArgs: [input.id]);
   }
 
   @override
@@ -270,13 +265,96 @@ class ClientAccountRepositoryImpl implements ClientAccountRepository {
 
   @override
   Future<ClientAccountSummary> clientSummary(int clientId) async {
-    final client = await getClient(clientId);
-    if (client == null) throw StateError('Client not found');
-    final charges = await _chargesForClient(clientId);
-    final payments = await _paymentsForClient(clientId);
-    final adjustments = await _adjustmentsForClient(clientId);
-    final allocByCharge = await _allocationsByCharge(clientId);
+    final results = await Future.wait<Object?>([
+      getClient(clientId),
+      _chargesForClient(clientId),
+      _paymentsForClient(clientId),
+      _adjustmentsForClient(clientId),
+      _allocationsByCharge(clientId),
+    ]);
 
+    final client = results[0] as Client?;
+    if (client == null) throw StateError('Client not found');
+    final charges = results[1] as List<ClientCharge>;
+    final payments = results[2] as List<ClientPayment>;
+    final adjustments = results[3] as List<ClientAdjustment>;
+    final allocByCharge = results[4] as Map<int, int>;
+
+    return _summaryFromData(
+      client: client,
+      charges: charges,
+      payments: payments,
+      adjustments: adjustments,
+      allocByCharge: allocByCharge,
+    );
+  }
+
+  @override
+  Future<List<ClientAccountSummary>> listClientSummaries({
+    ClientStatus? status,
+    String? query,
+  }) async {
+    final clients = await listClients(status: status, query: query);
+    if (clients.isEmpty) return const [];
+
+    final selectedIds = clients.map((c) => c.id).toSet();
+    final results = await Future.wait<List<Map<String, Object?>>>([
+      _db.query('client_charges'),
+      _db.query('client_payments'),
+      _db.query('client_adjustments'),
+      _db.query('payment_allocations'),
+    ]);
+
+    final chargesByClient = <int, List<ClientCharge>>{};
+    for (final r in results[0]) {
+      final clientId = r['client_id'] as int;
+      if (!selectedIds.contains(clientId)) continue;
+      (chargesByClient[clientId] ??= []).add(_chargeFromRow(r));
+    }
+
+    final paymentsByClient = <int, List<ClientPayment>>{};
+    for (final r in results[1]) {
+      final clientId = r['client_id'] as int;
+      if (!selectedIds.contains(clientId)) continue;
+      (paymentsByClient[clientId] ??= []).add(_paymentFromRow(r));
+    }
+
+    final adjustmentsByClient = <int, List<ClientAdjustment>>{};
+    for (final r in results[2]) {
+      final clientId = r['client_id'] as int;
+      if (!selectedIds.contains(clientId)) continue;
+      (adjustmentsByClient[clientId] ??= []).add(_adjFromRow(r));
+    }
+
+    final allocationsByClient = <int, Map<int, int>>{};
+    for (final r in results[3]) {
+      final clientId = r['client_id'] as int;
+      if (!selectedIds.contains(clientId)) continue;
+      final allocation = _allocFromRow(r);
+      final allocByCharge = allocationsByClient[clientId] ??= {};
+      allocByCharge[allocation.chargeId] =
+          (allocByCharge[allocation.chargeId] ?? 0) + allocation.amountMinor;
+    }
+
+    return [
+      for (final client in clients)
+        _summaryFromData(
+          client: client,
+          charges: chargesByClient[client.id] ?? const [],
+          payments: paymentsByClient[client.id] ?? const [],
+          adjustments: adjustmentsByClient[client.id] ?? const [],
+          allocByCharge: allocationsByClient[client.id] ?? const {},
+        ),
+    ];
+  }
+
+  ClientAccountSummary _summaryFromData({
+    required Client client,
+    required List<ClientCharge> charges,
+    required List<ClientPayment> payments,
+    required List<ClientAdjustment> adjustments,
+    required Map<int, int> allocByCharge,
+  }) {
     var chargeTotal = 0;
     var outstanding = 0;
     var openCount = 0;
@@ -310,10 +388,7 @@ class ClientAccountRepositoryImpl implements ClientAccountRepository {
     }
 
     final balance =
-        client.openingBalanceMinor +
-        chargeTotal -
-        paymentTotal +
-        adjEffect;
+        client.openingBalanceMinor + chargeTotal - paymentTotal + adjEffect;
 
     return ClientAccountSummary(
       client: client,
@@ -343,11 +418,18 @@ class ClientAccountRepositoryImpl implements ClientAccountRepository {
     DateTime? from,
     DateTime? to,
   }) async {
-    final client = await getClient(clientId);
+    final results = await Future.wait<Object?>([
+      getClient(clientId),
+      _chargesForClient(clientId),
+      _paymentsForClient(clientId),
+      _adjustmentsForClient(clientId),
+    ]);
+
+    final client = results[0] as Client?;
     if (client == null) throw StateError('Client not found');
-    final charges = await _chargesForClient(clientId);
-    final payments = await _paymentsForClient(clientId);
-    final adjustments = await _adjustmentsForClient(clientId);
+    final charges = results[1] as List<ClientCharge>;
+    final payments = results[2] as List<ClientPayment>;
+    final adjustments = results[3] as List<ClientAdjustment>;
 
     final rows = <_LedRow>[];
 
@@ -518,11 +600,14 @@ class ClientAccountRepositoryImpl implements ClientAccountRepository {
   }
 
   @override
-  Future<List<({ClientCharge charge, int openMinor})>> listChargesWithOpenAmount(
-    int clientId,
-  ) async {
-    final charges = await _chargesForClient(clientId);
-    final allocByCharge = await _allocationsByCharge(clientId);
+  Future<List<({ClientCharge charge, int openMinor})>>
+  listChargesWithOpenAmount(int clientId) async {
+    final results = await Future.wait<Object>([
+      _chargesForClient(clientId),
+      _allocationsByCharge(clientId),
+    ]);
+    final charges = results[0] as List<ClientCharge>;
+    final allocByCharge = results[1] as Map<int, int>;
     final out = <({ClientCharge charge, int openMinor})>[];
     for (final c in charges) {
       if (c.status == ChargeStatus.voided) continue;
@@ -601,8 +686,8 @@ class ClientAccountRepositoryImpl implements ClientAccountRepository {
     final unallocated = allocTotals.unallocatedMinor;
 
     int? ledgerTxId;
-    final book = await _ledger.defaultBook();
     if (input.syncLedgerIncome) {
+      final book = await _ledger.defaultBook();
       ledgerTxId = await _ledger.insertTransaction(
         bookId: book.id,
         accountId: input.accountId,
@@ -644,8 +729,12 @@ class ClientAccountRepositoryImpl implements ClientAccountRepository {
         }
         return paymentId;
       });
-      final saved = await getPayment(pid);
-      final allocsSaved = await listAllocationsForPayment(pid);
+      final savedResults = await Future.wait<Object?>([
+        getPayment(pid),
+        listAllocationsForPayment(pid),
+      ]);
+      final saved = savedResults[0] as ClientPayment?;
+      final allocsSaved = savedResults[1] as List<PaymentAllocation>;
       if (saved != null) {
         await _insertReceiptSnapshot(
           paymentId: pid,
@@ -669,10 +758,7 @@ class ClientAccountRepositoryImpl implements ClientAccountRepository {
 
     await _db.update(
       'client_payments',
-      {
-        'status': PaymentStatus.reversed.name,
-        'reversal_reason': reason.trim(),
-      },
+      {'status': PaymentStatus.reversed.name, 'reversal_reason': reason.trim()},
       where: 'id = ?',
       whereArgs: [paymentId],
     );
@@ -716,10 +802,15 @@ class ClientAccountRepositoryImpl implements ClientAccountRepository {
 
     final p = await getPayment(paymentId);
     if (p == null) throw StateError('Payment not found');
-    final client = await getClient(p.clientId);
+    final results = await Future.wait<Object?>([
+      getClient(p.clientId),
+      listAllocationsForPayment(paymentId),
+      _ledger.getSetting('business_name'),
+    ]);
+    final client = results[0] as Client?;
     if (client == null) throw StateError('Client not found');
-    final allocs = await listAllocationsForPayment(paymentId);
-    final bn = await _ledger.getSetting('business_name');
+    final allocs = results[1] as List<PaymentAllocation>;
+    final bn = results[2] as String?;
     final rn = p.receiptNumber ?? paymentId;
     return ReceiptDocument(
       paymentId: paymentId,
@@ -741,13 +832,13 @@ class ClientAccountRepositoryImpl implements ClientAccountRepository {
     );
   }
 
-  Future<int> _balanceBeforeStartOfDay(int clientId, DateTime day) async {
-    final client = await getClient(clientId);
-    if (client == null) throw StateError('Client not found');
-    final charges = await _chargesForClient(clientId);
-    final payments = await _paymentsForClient(clientId);
-    final adjustments = await _adjustmentsForClient(clientId);
-
+  int _balanceBeforeStartOfDay({
+    required Client client,
+    required List<ClientCharge> charges,
+    required List<ClientPayment> payments,
+    required List<ClientAdjustment> adjustments,
+    required DateTime day,
+  }) {
     final boundary = DateTime(day.year, day.month, day.day);
     final openD = client.openingBalanceDate ?? client.createdAt;
     final openDay = DateTime(openD.year, openD.month, openD.day);
@@ -779,8 +870,6 @@ class ClientAccountRepositoryImpl implements ClientAccountRepository {
   Future<StatementPreview> buildStatementPreview(
     BuildStatementInput input,
   ) async {
-    final client = await getClient(input.clientId);
-    if (client == null) throw StateError('Client not found');
     if (input.toDate.isBefore(input.fromDate)) {
       throw ArgumentError('date range');
     }
@@ -798,13 +887,27 @@ class ClientAccountRepositoryImpl implements ClientAccountRepository {
       input.toDate.day,
     );
 
-    final opening = await _balanceBeforeStartOfDay(input.clientId, fromDay);
-    final charges = await _chargesForClient(input.clientId);
-    final payments = await _paymentsForClient(input.clientId);
-    final adjustments = await _adjustmentsForClient(input.clientId);
+    final results = await Future.wait<Object?>([
+      getClient(input.clientId),
+      _chargesForClient(input.clientId),
+      _paymentsForClient(input.clientId),
+      _adjustmentsForClient(input.clientId),
+    ]);
 
-    final events =
-        <({DateTime at, String label, String? detail, int delta})>[];
+    final client = results[0] as Client?;
+    if (client == null) throw StateError('Client not found');
+    final charges = results[1] as List<ClientCharge>;
+    final payments = results[2] as List<ClientPayment>;
+    final adjustments = results[3] as List<ClientAdjustment>;
+    final opening = _balanceBeforeStartOfDay(
+      client: client,
+      charges: charges,
+      payments: payments,
+      adjustments: adjustments,
+      day: fromDay,
+    );
+
+    final events = <({DateTime at, String label, String? detail, int delta})>[];
     for (final c in charges) {
       if (c.status == ChargeStatus.voided) continue;
       events.add((
@@ -920,30 +1023,27 @@ class ClientAccountRepositoryImpl implements ClientAccountRepository {
       for (final a in allocations)
         {'chargeId': a.chargeId, 'amountMinor': a.amountMinor},
     ];
-    await _db.insert(
-      'client_receipts',
-      {
-        'payment_id': paymentId,
-        'receipt_number': payment.receiptNumber ?? paymentId,
-        'issued_at': payment.receivedAt.millisecondsSinceEpoch,
-        'client_id': client.id,
-        'client_display_name': client.displayName,
-        'client_code': client.clientCode,
-        'amount_minor': payment.amountMinor,
-        'method': payment.method.name,
-        'business_name': bn,
-        'reference': payment.reference,
-        'notes': payment.notes,
-        'allocations_json': jsonEncode(payload),
-        'payment_reversed': 0,
-      },
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    await _db.insert('client_receipts', {
+      'payment_id': paymentId,
+      'receipt_number': payment.receiptNumber ?? paymentId,
+      'issued_at': payment.receivedAt.millisecondsSinceEpoch,
+      'client_id': client.id,
+      'client_display_name': client.displayName,
+      'client_code': client.clientCode,
+      'amount_minor': payment.amountMinor,
+      'method': payment.method.name,
+      'business_name': bn,
+      'reference': payment.reference,
+      'notes': payment.notes,
+      'allocations_json': jsonEncode(payload),
+      'payment_reversed': 0,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   ReceiptDocument _receiptDocumentFromSql(Map<String, Object?> r) {
     final paymentId = r['payment_id'] as int;
-    final decoded = jsonDecode(r['allocations_json'] as String) as List<dynamic>;
+    final decoded =
+        jsonDecode(r['allocations_json'] as String) as List<dynamic>;
     final allocations = <({int chargeId, int amountMinor})>[];
     for (final item in decoded) {
       if (item is Map) {
@@ -973,28 +1073,116 @@ class ClientAccountRepositoryImpl implements ClientAccountRepository {
 
   @override
   Future<OverviewMetrics> overviewMetrics() async {
-    final clients = await listClients(status: ClientStatus.active);
-    var totalBal = 0;
-    var openCharges = 0;
-    var overdue = 0;
-    for (final c in clients) {
-      final s = await clientSummary(c.id);
-      totalBal += s.balanceMinor;
-      openCharges += s.outstandingChargesMinor;
-      overdue += s.overdueOpenChargeCount;
-    }
-    final pays = await listPayments(status: PaymentStatus.posted);
-    final cutoff = DateTime.now().subtract(const Duration(days: 30));
-    var last30 = 0;
-    for (final p in pays) {
-      if (!p.receivedAt.isBefore(cutoff)) last30 += p.amountMinor;
-    }
+    final now = DateTime.now();
+    final todayStart = DateTime(
+      now.year,
+      now.month,
+      now.day,
+    ).millisecondsSinceEpoch;
+    final cutoff = now
+        .subtract(const Duration(days: 30))
+        .millisecondsSinceEpoch;
+
+    final results = await Future.wait<List<Map<String, Object?>>>([
+      _db.rawQuery(
+        '''
+SELECT
+  COUNT(*) AS active_count,
+  COALESCE(SUM(opening_balance_minor), 0) AS opening_total
+FROM clients
+WHERE status = ?
+''',
+        [ClientStatus.active.name],
+      ),
+      _db.rawQuery(
+        '''
+SELECT
+  (SELECT COALESCE(SUM(ch.amount_minor), 0)
+   FROM client_charges ch
+   JOIN clients c ON c.id = ch.client_id
+   WHERE c.status = ? AND ch.status != ?) AS charge_total,
+  (SELECT COALESCE(SUM(p.amount_minor), 0)
+   FROM client_payments p
+   JOIN clients c ON c.id = p.client_id
+   WHERE c.status = ? AND p.status != ?) AS payment_total,
+  (SELECT COALESCE(SUM(
+    CASE a.kind
+      WHEN 'increase' THEN a.amount_minor
+      ELSE -a.amount_minor
+    END
+   ), 0)
+   FROM client_adjustments a
+   JOIN clients c ON c.id = a.client_id
+   WHERE c.status = ?) AS adjustment_total
+''',
+        [
+          ClientStatus.active.name,
+          ChargeStatus.voided.name,
+          ClientStatus.active.name,
+          PaymentStatus.reversed.name,
+          ClientStatus.active.name,
+        ],
+      ),
+      _db.rawQuery(
+        '''
+WITH alloc AS (
+  SELECT charge_id, SUM(amount_minor) AS allocated
+  FROM payment_allocations
+  GROUP BY charge_id
+)
+SELECT
+  COALESCE(SUM(
+    CASE
+      WHEN ch.amount_minor - COALESCE(alloc.allocated, 0) > 0
+        THEN ch.amount_minor - COALESCE(alloc.allocated, 0)
+      ELSE 0
+    END
+  ), 0) AS open_total,
+  COALESCE(SUM(
+    CASE
+      WHEN ch.due_date IS NOT NULL
+        AND ch.due_date < ?
+        AND ch.amount_minor - COALESCE(alloc.allocated, 0) > 0
+        THEN 1
+      ELSE 0
+    END
+  ), 0) AS overdue_count
+FROM client_charges ch
+JOIN clients c ON c.id = ch.client_id
+LEFT JOIN alloc ON alloc.charge_id = ch.id
+WHERE c.status = ?
+  AND ch.status != ?
+''',
+        [todayStart, ClientStatus.active.name, ChargeStatus.voided.name],
+      ),
+      _db.rawQuery(
+        '''
+SELECT COALESCE(SUM(amount_minor), 0) AS last30
+FROM client_payments
+WHERE status = ?
+  AND received_at >= ?
+''',
+        [PaymentStatus.posted.name, cutoff],
+      ),
+    ]);
+
+    final clientRow = results[0].first;
+    final balanceRow = results[1].first;
+    final openRow = results[2].first;
+    final paymentRow = results[3].first;
+
+    final openingTotal = (clientRow['opening_total'] as num).toInt();
+    final chargeTotal = (balanceRow['charge_total'] as num).toInt();
+    final paymentTotal = (balanceRow['payment_total'] as num).toInt();
+    final adjustmentTotal = (balanceRow['adjustment_total'] as num).toInt();
+
     return OverviewMetrics(
-      totalBalanceMinor: totalBal,
-      openChargesTotalMinor: openCharges,
-      overdueOpenChargeCount: overdue,
-      postedPaymentsLast30DaysMinor: last30,
-      activeClientCount: clients.length,
+      totalBalanceMinor:
+          openingTotal + chargeTotal - paymentTotal + adjustmentTotal,
+      openChargesTotalMinor: (openRow['open_total'] as num).toInt(),
+      overdueOpenChargeCount: (openRow['overdue_count'] as num).toInt(),
+      postedPaymentsLast30DaysMinor: (paymentRow['last30'] as num).toInt(),
+      activeClientCount: (clientRow['active_count'] as num).toInt(),
     );
   }
 }

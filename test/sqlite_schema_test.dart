@@ -16,14 +16,14 @@ void main() {
   });
 
   test(
-    'fresh v4 schema includes client-account tables and ledger indexes',
+    'fresh v5 schema includes client-account tables and performance indexes',
     () async {
       final db = await databaseFactory.openDatabase(
         inMemoryDatabasePath,
         options: OpenDatabaseOptions(
-          version: 4,
+          version: 5,
           onCreate: (db, version) async {
-            await createBennetDatabaseSchemaV4(db);
+            await createBennetDatabaseSchemaV5(db);
           },
         ),
       );
@@ -55,6 +55,11 @@ void main() {
             'idx_tx_book_occurred',
             'idx_period_openings_book_period',
             'idx_balance_sheet_book_order',
+            'idx_clients_book_status_name',
+            'idx_charges_client_status_due',
+            'idx_payments_client_status_received',
+            'idx_alloc_client_charge',
+            'idx_statement_lines_account_match',
           }),
         );
       } finally {

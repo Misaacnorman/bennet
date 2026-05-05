@@ -44,58 +44,70 @@ final categoriesProvider = FutureProvider<List<Category>>((ref) async {
   return repo.listCategories();
 });
 
-final accountsProvider = FutureProvider.family<List<Account>, int>((ref, bookId) async {
+final accountsProvider = FutureProvider.family<List<Account>, int>((
+  ref,
+  bookId,
+) async {
   final repo = await ref.watch(ledgerRepositoryProvider.future);
   return repo.listAccounts(bookId);
 });
 
 final monthlySummaryProvider =
-    FutureProvider.family<MonthlySummary, ({int bookId, int year, int month})>(
-  (ref, arg) async {
-    final repo = await ref.watch(ledgerRepositoryProvider.future);
-    return repo.monthlySummary(arg.bookId, arg.year, arg.month);
-  },
-);
+    FutureProvider.family<MonthlySummary, ({int bookId, int year, int month})>((
+      ref,
+      arg,
+    ) async {
+      final repo = await ref.watch(ledgerRepositoryProvider.future);
+      return repo.monthlySummary(arg.bookId, arg.year, arg.month);
+    });
 
 final openingBalanceProvider =
-    FutureProvider.family<int, ({int bookId, int year, int month})>((ref, arg) async {
-  final repo = await ref.watch(ledgerRepositoryProvider.future);
-  return repo.resolveOpeningMinor(arg.bookId, arg.year, arg.month);
-});
+    FutureProvider.family<int, ({int bookId, int year, int month})>((
+      ref,
+      arg,
+    ) async {
+      final repo = await ref.watch(ledgerRepositoryProvider.future);
+      return repo.resolveOpeningMinor(arg.bookId, arg.year, arg.month);
+    });
 
-final transactionsProvider = FutureProvider.family<
-    List<LedgerTransaction>,
-    ({int bookId, int? year, int? month})>((ref, arg) async {
-  final repo = await ref.watch(ledgerRepositoryProvider.future);
-  return repo.listTransactions(
-    bookId: arg.bookId,
-    year: arg.year,
-    month: arg.month,
-  );
-});
+final transactionsProvider =
+    FutureProvider.family<
+      List<LedgerTransaction>,
+      ({int bookId, int? year, int? month})
+    >((ref, arg) async {
+      final repo = await ref.watch(ledgerRepositoryProvider.future);
+      return repo.listTransactions(
+        bookId: arg.bookId,
+        year: arg.year,
+        month: arg.month,
+      );
+    });
 
 final businessNameProvider = FutureProvider<String?>((ref) async {
   final repo = await ref.watch(ledgerRepositoryProvider.future);
   return repo.getSetting('business_name');
 });
 
-final reconciliationBundleProvider = FutureProvider.family<
-    ({
-      List<BankStatementLine> lines,
-      ReconciliationSummary summary,
-    }),
-    int>((ref, accountId) async {
-  final repo = await ref.watch(ledgerRepositoryProvider.future);
-  final lines = await repo.listStatementLines(accountId);
-  final summary = await repo.reconciliationSummary(accountId);
-  return (lines: lines, summary: summary);
-});
+final reconciliationBundleProvider =
+    FutureProvider.family<
+      ({List<BankStatementLine> lines, ReconciliationSummary summary}),
+      int
+    >((ref, accountId) async {
+      final repo = await ref.watch(ledgerRepositoryProvider.future);
+      final results = await Future.wait<Object>([
+        repo.listStatementLines(accountId),
+        repo.reconciliationSummary(accountId),
+      ]);
+      final lines = results[0] as List<BankStatementLine>;
+      final summary = results[1] as ReconciliationSummary;
+      return (lines: lines, summary: summary);
+    });
 
 final balanceSheetItemsProvider =
     FutureProvider.family<List<BalanceSheetItem>, int>((ref, bookId) async {
-  final repo = await ref.watch(ledgerRepositoryProvider.future);
-  return repo.listBalanceSheetItems(bookId);
-});
+      final repo = await ref.watch(ledgerRepositoryProvider.future);
+      return repo.listBalanceSheetItems(bookId);
+    });
 
 /// Invalidates data-heavy providers after writes.
 void invalidateLedger(WidgetRef ref) {

@@ -29,7 +29,8 @@ class StatementBuilderScreen extends ConsumerStatefulWidget {
       _StatementBuilderScreenState();
 }
 
-class _StatementBuilderScreenState extends ConsumerState<StatementBuilderScreen> {
+class _StatementBuilderScreenState
+    extends ConsumerState<StatementBuilderScreen> {
   late DateTime _from;
   late DateTime _to;
 
@@ -41,8 +42,11 @@ class _StatementBuilderScreenState extends ConsumerState<StatementBuilderScreen>
     _to = DateTime(n.year, n.month + 1, 0);
   }
 
-  BuildStatementInput get _input =>
-      BuildStatementInput(clientId: widget.clientId, fromDate: _from, toDate: _to);
+  BuildStatementInput get _input => BuildStatementInput(
+    clientId: widget.clientId,
+    fromDate: _from,
+    toDate: _to,
+  );
 
   Future<void> _pickFrom() async {
     final d = await showDatePicker(
@@ -85,9 +89,19 @@ class _StatementBuilderScreenState extends ConsumerState<StatementBuilderScreen>
     }
     try {
       final repo = await ref.clientAccounts;
-      final preview = await repo.buildStatementPreview(_input);
-      final savedId = await repo.saveStatement(_input);
-      final businessName = await ref.read(businessNameProvider.future);
+      final preview = await ref.read(
+        statementPreviewProvider((
+          clientId: widget.clientId,
+          from: _from,
+          to: _to,
+        )).future,
+      );
+      final results = await Future.wait<Object?>([
+        repo.saveStatement(_input),
+        ref.read(businessNameProvider.future),
+      ]);
+      final savedId = results[0] as int;
+      final businessName = results[1] as String?;
       ClientStatement? savedStmt;
       final stmts = await repo.listStatements(clientId: widget.clientId);
       for (final s in stmts) {
@@ -378,7 +392,8 @@ class _StatementBuilderScreenState extends ConsumerState<StatementBuilderScreen>
                 '${df.format(line.occurredAt)}'
                 '${line.detail != null && line.detail!.trim().isNotEmpty ? '\n${line.detail}' : ''}',
               ),
-              isThreeLine: line.detail != null && line.detail!.trim().isNotEmpty,
+              isThreeLine:
+                  line.detail != null && line.detail!.trim().isNotEmpty,
               trailing: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.end,

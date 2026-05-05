@@ -242,10 +242,15 @@ class FirestoreLedgerRepository implements LedgerRepository {
   @override
   Future<LedgerTransaction?> getTransaction(int id) async {
     await ensureBootstrap();
-    final d = await _transactions.doc('$id').get();
+    final results = await Future.wait<Object>([
+      _transactions.doc('$id').get(),
+      _categoryNames(),
+      _accountNames(),
+    ]);
+    final d = results[0] as DocumentSnapshot<Map<String, dynamic>>;
     if (!d.exists) return null;
-    final catNames = await _categoryNames();
-    final accNames = await _accountNames();
+    final catNames = results[1] as Map<int, String>;
+    final accNames = results[2] as Map<int, String>;
     return _txFromDoc(d, catNames, accNames);
   }
 
@@ -586,7 +591,14 @@ class FirestoreLedgerRepository implements LedgerRepository {
 
   @override
   Future<ReconciliationSummary> reconciliationSummary(int accountId) async {
-    final lines = await listStatementLines(accountId);
+    final results = await Future.wait<Object>([
+      listStatementLines(accountId),
+      listTransactions(bookId: _defaultBookId, accountId: accountId),
+    ]);
+    final lines = results[0] as List<BankStatementLine>;
+    final txs = results[1] as List<LedgerTransaction>;
+    final txById = {for (final tx in txs) tx.id: tx};
+
     int stmtNet = 0;
     int unmatchedStmt = 0;
     int matchedBook = 0;
@@ -595,7 +607,7 @@ class FirestoreLedgerRepository implements LedgerRepository {
       if (line.matchedTransactionId == null) {
         unmatchedStmt += line.amountMinor;
       } else {
-        final tx = await getTransaction(line.matchedTransactionId!);
+        final tx = txById[line.matchedTransactionId!];
         if (tx != null) {
           matchedBook += tx.type == TxType.income
               ? tx.amountMinor
@@ -604,10 +616,6 @@ class FirestoreLedgerRepository implements LedgerRepository {
       }
     }
 
-    final txs = await listTransactions(
-      bookId: _defaultBookId,
-      accountId: accountId,
-    );
     int uncleared = 0;
     for (final t in txs) {
       if (t.clearedAt != null) continue;

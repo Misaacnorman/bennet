@@ -139,7 +139,6 @@ class AppDrawer extends StatelessWidget {
 class _ResponsiveSidebar extends StatelessWidget {
   const _ResponsiveSidebar({required this.collapsed, required this.onToggle});
 
-  static const double _collapsedWidth = 56;
   static const double _expandedWidth = 216;
   static const double _notchWidth = 28;
 
@@ -150,47 +149,37 @@ class _ResponsiveSidebar extends StatelessWidget {
   Widget build(BuildContext context) {
     final loc = GoRouterState.of(context).uri.path;
     final scheme = Theme.of(context).colorScheme;
-    final panelWidth = collapsed ? _collapsedWidth : _expandedWidth;
     final notchOverlap = _notchWidth / 2;
+    final sidebarWidth = collapsed
+        ? _notchWidth
+        : _expandedWidth + notchOverlap;
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 180),
       curve: Curves.easeOutCubic,
-      width: panelWidth + notchOverlap,
+      width: sidebarWidth,
       child: Stack(
         children: [
-          Positioned.fill(
-            right: notchOverlap,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: scheme.surfaceContainerLow,
-                border: Border(right: BorderSide(color: scheme.outlineVariant)),
-              ),
-              child: SafeArea(
-                right: false,
-                child: Column(
-                  children: [
-                    Padding(
-                      padding: EdgeInsets.fromLTRB(
-                        collapsed ? 8 : 14,
-                        12,
-                        8,
-                        8,
-                      ),
-                      child: SizedBox(
-                        height: 34,
-                        child: Row(
-                          mainAxisAlignment: collapsed
-                              ? MainAxisAlignment.center
-                              : MainAxisAlignment.start,
-                          children: [
-                            if (collapsed)
-                              Text(
-                                'B',
-                                style: Theme.of(context).textTheme.titleMedium
-                                    ?.copyWith(fontWeight: FontWeight.w800),
-                              )
-                            else
+          if (!collapsed)
+            Positioned.fill(
+              right: notchOverlap,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: scheme.surfaceContainerLow,
+                  border: Border(
+                    right: BorderSide(color: scheme.outlineVariant),
+                  ),
+                ),
+                child: SafeArea(
+                  right: false,
+                  child: Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(14, 12, 8, 8),
+                        child: SizedBox(
+                          height: 34,
+                          child: Row(
+                            children: [
                               Expanded(
                                 child: Text(
                                   'Bennet',
@@ -200,50 +189,47 @@ class _ResponsiveSidebar extends StatelessWidget {
                                       ?.copyWith(fontWeight: FontWeight.w800),
                                 ),
                               ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
-                    ),
-                    Expanded(
-                      child: ListView.builder(
-                        padding: const EdgeInsets.fromLTRB(7, 4, 7, 12),
-                        itemCount: BennetNav.destinations.length,
-                        itemBuilder: (context, i) {
-                          final d = BennetNav.destinations[i];
-                          final selected = BennetNav._selected(loc, d.path);
-                          final item = Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 1),
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(8),
-                              onTap: () => context.go(d.path),
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 140),
-                                curve: Curves.easeOut,
-                                height: 38,
-                                padding: EdgeInsets.symmetric(
-                                  horizontal: collapsed ? 0 : 10,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: selected
-                                      ? scheme.primaryContainer.withValues(
-                                          alpha: 0.75,
-                                        )
-                                      : Colors.transparent,
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Row(
-                                  mainAxisAlignment: collapsed
-                                      ? MainAxisAlignment.center
-                                      : MainAxisAlignment.start,
-                                  children: [
-                                    Icon(
-                                      d.icon,
-                                      size: 17,
-                                      color: selected
-                                          ? scheme.onPrimaryContainer
-                                          : scheme.onSurfaceVariant,
-                                    ),
-                                    if (!collapsed) ...[
+                      Expanded(
+                        child: ListView.builder(
+                          padding: const EdgeInsets.fromLTRB(7, 4, 7, 12),
+                          itemCount: BennetNav.destinations.length,
+                          itemBuilder: (context, i) {
+                            final d = BennetNav.destinations[i];
+                            final selected = BennetNav._selected(loc, d.path);
+
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 1),
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(8),
+                                onTap: () => context.go(d.path),
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 140),
+                                  curve: Curves.easeOut,
+                                  height: 38,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: selected
+                                        ? scheme.primaryContainer.withValues(
+                                            alpha: 0.75,
+                                          )
+                                        : Colors.transparent,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        d.icon,
+                                        size: 17,
+                                        color: selected
+                                            ? scheme.onPrimaryContainer
+                                            : scheme.onSurfaceVariant,
+                                      ),
                                       const SizedBox(width: 9),
                                       Expanded(
                                         child: Text(
@@ -264,26 +250,18 @@ class _ResponsiveSidebar extends StatelessWidget {
                                         ),
                                       ),
                                     ],
-                                  ],
+                                  ),
                                 ),
                               ),
-                            ),
-                          );
-
-                          if (!collapsed) return item;
-                          return Tooltip(
-                            message: d.label,
-                            waitDuration: const Duration(milliseconds: 450),
-                            child: item,
-                          );
-                        },
+                            );
+                          },
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
           Positioned(
             right: 0,
             top: 54,

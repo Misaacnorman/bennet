@@ -4,7 +4,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
 
 const _dbName = 'bennet.db';
-const dbVersion = 4;
+const dbVersion = 5;
 
 Future<String> bennetDatabasePath() async {
   final dir = await getApplicationDocumentsDirectory();
@@ -219,6 +219,31 @@ Future<void> installLedgerPerformanceIndexesV4(Database db) async {
   );
 }
 
+/// Performance indexes for client-account loading paths (migration v5).
+Future<void> installClientAccountPerformanceIndexesV5(Database db) async {
+  await db.execute(
+    'CREATE INDEX IF NOT EXISTS idx_clients_book_status_name ON clients(book_id, status, display_name COLLATE NOCASE)',
+  );
+  await db.execute(
+    'CREATE INDEX IF NOT EXISTS idx_charges_client_status_due ON client_charges(client_id, status, due_date, issued_at)',
+  );
+  await db.execute(
+    'CREATE INDEX IF NOT EXISTS idx_payments_client_status_received ON client_payments(client_id, status, received_at)',
+  );
+  await db.execute(
+    'CREATE INDEX IF NOT EXISTS idx_adjustments_client_effective ON client_adjustments(client_id, effective_at)',
+  );
+  await db.execute(
+    'CREATE INDEX IF NOT EXISTS idx_alloc_client_charge ON payment_allocations(client_id, charge_id)',
+  );
+  await db.execute(
+    'CREATE INDEX IF NOT EXISTS idx_alloc_charge ON payment_allocations(charge_id)',
+  );
+  await db.execute(
+    'CREATE INDEX IF NOT EXISTS idx_statement_lines_account_match ON bank_statement_lines(account_id, matched_transaction_id, posted_at)',
+  );
+}
+
 /// Full v3 schema for a new database (tests and older migrations).
 @visibleForTesting
 Future<void> createBennetDatabaseSchemaV3(Database db) async {
@@ -232,6 +257,13 @@ Future<void> createBennetDatabaseSchemaV3(Database db) async {
 Future<void> createBennetDatabaseSchemaV4(Database db) async {
   await createBennetDatabaseSchemaV3(db);
   await installLedgerPerformanceIndexesV4(db);
+}
+
+/// Full v5 schema for new databases.
+@visibleForTesting
+Future<void> createBennetDatabaseSchemaV5(Database db) async {
+  await createBennetDatabaseSchemaV4(db);
+  await installClientAccountPerformanceIndexesV5(db);
 }
 
 Future<Database> openBennetDatabase() async {
@@ -252,9 +284,12 @@ Future<Database> openBennetDatabase() async {
       if (oldVersion < 4) {
         await installLedgerPerformanceIndexesV4(db);
       }
+      if (oldVersion < 5) {
+        await installClientAccountPerformanceIndexesV5(db);
+      }
     },
     onCreate: (db, version) async {
-      await createBennetDatabaseSchemaV4(db);
+      await createBennetDatabaseSchemaV5(db);
     },
   );
 }

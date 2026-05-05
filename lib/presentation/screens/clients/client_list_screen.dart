@@ -33,7 +33,7 @@ class _ClientListScreenState extends ConsumerState<ClientListScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final asyncClients = ref.watch(clientsProvider);
+    final asyncSummaries = ref.watch(clientSummariesProvider);
 
     return BennetScaffold(
       title: 'Clients',
@@ -42,10 +42,12 @@ class _ClientListScreenState extends ConsumerState<ClientListScreen> {
         icon: const Icon(Icons.add),
         label: const Text('New client'),
       ),
-      body: asyncClients.when(
+      body: asyncSummaries.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('$e')),
-        data: (all) {
+        data: (summaries) {
+          final all = [for (final s in summaries) s.client];
+          final summaryByClientId = {for (final s in summaries) s.client.id: s};
           final visibilityFiltered = _includeArchived
               ? all
               : all.where((c) => c.status != ClientStatus.archived).toList();
@@ -54,8 +56,8 @@ class _ClientListScreenState extends ConsumerState<ClientListScreen> {
           final clients = q.isEmpty
               ? visibilityFiltered
               : visibilityFiltered
-                  .where((c) => c.matchesClientDirectoryQuery(q))
-                  .toList();
+                    .where((c) => c.matchesClientDirectoryQuery(q))
+                    .toList();
 
           return ListView(
             padding: const EdgeInsets.all(16),
@@ -121,8 +123,7 @@ class _ClientListScreenState extends ConsumerState<ClientListScreen> {
                             )
                           : FilledButton.icon(
                               onPressed: () => context.go('/clients/new'),
-                              icon:
-                                  const Icon(Icons.person_add_alt_1_outlined),
+                              icon: const Icon(Icons.person_add_alt_1_outlined),
                               label: const Text('New client'),
                             );
                     }
@@ -138,8 +139,8 @@ class _ClientListScreenState extends ConsumerState<ClientListScreen> {
                 )
               else
                 ResponsiveDataSurface(
-                  table: _table(context, clients),
-                  cards: _cards(context, clients, theme),
+                  table: _table(context, clients, summaryByClientId),
+                  cards: _cards(context, clients, summaryByClientId, theme),
                 ),
             ],
           );
@@ -148,7 +149,11 @@ class _ClientListScreenState extends ConsumerState<ClientListScreen> {
     );
   }
 
-  Widget _table(BuildContext context, List<Client> clients) {
+  Widget _table(
+    BuildContext context,
+    List<Client> clients,
+    Map<int, ClientAccountSummary> summaryByClientId,
+  ) {
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -169,20 +174,7 @@ class _ClientListScreenState extends ConsumerState<ClientListScreen> {
                   DataCell(Text(c.clientCode)),
                   DataCell(Text(c.displayName)),
                   DataCell(
-                    Consumer(
-                      builder: (context, ref, _) {
-                        final s = ref.watch(clientSummaryProvider(c.id));
-                        return s.when(
-                          loading: () => const SizedBox(
-                            width: 22,
-                            height: 22,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                          error: (_, _) => const Text('—'),
-                          data: (sum) => AmountText(sum.balanceMinor),
-                        );
-                      },
-                    ),
+                    AmountText(summaryByClientId[c.id]?.balanceMinor ?? 0),
                   ),
                   DataCell(_status(c.status, Theme.of(context))),
                 ],
@@ -193,7 +185,12 @@ class _ClientListScreenState extends ConsumerState<ClientListScreen> {
     );
   }
 
-  Widget _cards(BuildContext context, List<Client> clients, ThemeData theme) {
+  Widget _cards(
+    BuildContext context,
+    List<Client> clients,
+    Map<int, ClientAccountSummary> summaryByClientId,
+    ThemeData theme,
+  ) {
     return Column(
       children: [
         for (final c in clients)
@@ -210,20 +207,7 @@ class _ClientListScreenState extends ConsumerState<ClientListScreen> {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   _status(c.status, theme),
-                  Consumer(
-                    builder: (context, ref, _) {
-                      final s = ref.watch(clientSummaryProvider(c.id));
-                      return s.when(
-                        loading: () => const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                        error: (_, _) => const Text('—'),
-                        data: (sum) => AmountText(sum.balanceMinor),
-                      );
-                    },
-                  ),
+                  AmountText(summaryByClientId[c.id]?.balanceMinor ?? 0),
                 ],
               ),
               onTap: () => context.go('/clients/${c.id}'),

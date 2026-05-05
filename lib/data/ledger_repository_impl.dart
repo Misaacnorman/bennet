@@ -439,39 +439,56 @@ WHERE book_id = ?
     });
   }
 
-  int _signedTx(LedgerTransaction t) =>
-      t.type == TxType.income ? t.amountMinor : -t.amountMinor;
-
   @override
   Future<ReconciliationSummary> reconciliationSummary(int accountId) async {
-    final lines = await listStatementLines(accountId);
-    var stmtNet = 0;
-    var unmatchedStmt = 0;
-    var matchedBook = 0;
-    for (final line in lines) {
-      stmtNet += line.amountMinor;
-      if (line.matchedTransactionId == null) {
-        unmatchedStmt += line.amountMinor;
-      } else {
-        final tx = await getTransaction(line.matchedTransactionId!);
-        if (tx != null) matchedBook += _signedTx(tx);
-      }
-    }
-
-    final bookRows = await _db.rawQuery(
-      '''
-SELECT * FROM transactions WHERE account_id = ?
+    final results = await Future.wait<List<Map<String, Object?>>>([
+      _db.rawQuery(
+        '''
+SELECT
+  COALESCE(SUM(amount_minor), 0) AS statement_net,
+  COALESCE(SUM(CASE WHEN matched_transaction_id IS NULL THEN amount_minor ELSE 0 END), 0)
+    AS unmatched_statement
+FROM bank_statement_lines
+WHERE account_id = ?
 ''',
-      [accountId],
-    );
-    var uncleared = 0;
-    for (final r in bookRows) {
-      if (r['cleared_at'] != null) continue;
-      final typeStr = r['type'] as String;
-      final amt = r['amount_minor'] as int;
-      final type = TxTypeSerialized.parse(typeStr);
-      uncleared += type == TxType.income ? amt : -amt;
-    }
+        [accountId],
+      ),
+      _db.rawQuery(
+        '''
+SELECT COALESCE(SUM(
+  CASE t.type
+    WHEN 'income' THEN t.amount_minor
+    ELSE -t.amount_minor
+  END
+), 0) AS matched_book
+FROM bank_statement_lines l
+JOIN transactions t ON t.id = l.matched_transaction_id
+WHERE l.account_id = ?
+  AND l.matched_transaction_id IS NOT NULL
+''',
+        [accountId],
+      ),
+      _db.rawQuery(
+        '''
+SELECT COALESCE(SUM(
+  CASE type
+    WHEN 'income' THEN amount_minor
+    ELSE -amount_minor
+  END
+), 0) AS uncleared
+FROM transactions
+WHERE account_id = ?
+  AND cleared_at IS NULL
+''',
+        [accountId],
+      ),
+    ]);
+
+    final statementRow = results[0].first;
+    final stmtNet = (statementRow['statement_net'] as num).toInt();
+    final unmatchedStmt = (statementRow['unmatched_statement'] as num).toInt();
+    final matchedBook = (results[1].first['matched_book'] as num).toInt();
+    final uncleared = (results[2].first['uncleared'] as num).toInt();
 
     return ReconciliationSummary(
       statementNetMinor: stmtNet,

@@ -29,6 +29,7 @@ class _PaymentEditScreenState extends ConsumerState<PaymentEditScreen> {
   int? _accountId;
   int? _categoryId;
   bool _loading = true;
+
   /// Amount strings keyed by charge id (optional payment allocations).
   final Map<int, String> _allocByChargeId = {};
   int _allocSeed = 0;
@@ -49,10 +50,13 @@ class _PaymentEditScreenState extends ConsumerState<PaymentEditScreen> {
   }
 
   Future<void> _load() async {
-    final ledger = await ref.read(ledgerRepositoryProvider.future);
-    final book = await ledger.defaultBook();
-    final accounts = await ledger.listAccounts(book.id);
-    final categories = await ledger.listCategories();
+    final book = await ref.read(defaultBookProvider.future);
+    final results = await Future.wait<Object>([
+      ref.read(accountsProvider(book.id).future),
+      ref.read(categoriesProvider.future),
+    ]);
+    final accounts = results[0] as List<Account>;
+    final categories = results[1] as List<Category>;
     if (!mounted) return;
     setState(() {
       _accountId = accounts.isNotEmpty ? accounts.first.id : null;
@@ -63,7 +67,8 @@ class _PaymentEditScreenState extends ConsumerState<PaymentEditScreen> {
           break;
         }
       }
-      _categoryId = inc?.id ?? (categories.isNotEmpty ? categories.first.id : null);
+      _categoryId =
+          inc?.id ?? (categories.isNotEmpty ? categories.first.id : null);
       _loading = false;
     });
   }
@@ -87,8 +92,7 @@ class _PaymentEditScreenState extends ConsumerState<PaymentEditScreen> {
     final next = <int, String>{};
     for (final row in openCharges) {
       if (remaining <= 0) break;
-      final take =
-          remaining < row.openMinor ? remaining : row.openMinor;
+      final take = remaining < row.openMinor ? remaining : row.openMinor;
       next[row.charge.id] = (take / 100).toStringAsFixed(2);
       remaining -= take;
     }
@@ -104,9 +108,9 @@ class _PaymentEditScreenState extends ConsumerState<PaymentEditScreen> {
     final messenger = ScaffoldMessenger.of(context);
     final minor = parseMoneyInput(_amountCtrl.text);
     if (minor == null || minor <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter a valid amount.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Enter a valid amount.')));
       return;
     }
     if (_clientId == null || _accountId == null || _categoryId == null) {
@@ -118,11 +122,8 @@ class _PaymentEditScreenState extends ConsumerState<PaymentEditScreen> {
 
     final repo = await ref.clientAccounts;
     try {
-      final openRows =
-          await repo.listChargesWithOpenAmount(_clientId!);
-      final openById = {
-        for (final r in openRows) r.charge.id: r.openMinor,
-      };
+      final openRows = await repo.listChargesWithOpenAmount(_clientId!);
+      final openById = {for (final r in openRows) r.charge.id: r.openMinor};
 
       final allocations = <PaymentAllocationInput>[];
       for (final e in _allocByChargeId.entries) {
@@ -174,8 +175,7 @@ class _PaymentEditScreenState extends ConsumerState<PaymentEditScreen> {
           accountId: _accountId!,
           categoryId: _categoryId!,
           allocations: allocations,
-          reference:
-              _refCtrl.text.trim().isEmpty ? null : _refCtrl.text.trim(),
+          reference: _refCtrl.text.trim().isEmpty ? null : _refCtrl.text.trim(),
           notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
         ),
       );
@@ -213,242 +213,231 @@ class _PaymentEditScreenState extends ConsumerState<PaymentEditScreen> {
           final categoriesAsync = ref.watch(categoriesProvider);
 
           return ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                clientsAsync.when(
-                  loading: () => const LinearProgressIndicator(),
-                  error: (e, _) => Text('$e'),
-                  data: (clients) {
-                    return DropdownButtonFormField<int>(
-                      // ignore: deprecated_member_use
-                      value: _clientId,
-                      decoration: const InputDecoration(
-                        labelText: 'Client',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: [
-                        for (final c in clients)
-                          DropdownMenuItem(value: c.id, child: Text(c.displayName)),
-                      ],
-                      onChanged: (v) => setState(() {
-                        _clientId = v;
-                        _allocByChargeId.clear();
-                        _allocSeed++;
-                      }),
+            padding: const EdgeInsets.all(16),
+            children: [
+              clientsAsync.when(
+                loading: () => const LinearProgressIndicator(),
+                error: (e, _) => Text('$e'),
+                data: (clients) {
+                  return DropdownButtonFormField<int>(
+                    // ignore: deprecated_member_use
+                    value: _clientId,
+                    decoration: const InputDecoration(
+                      labelText: 'Client',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: [
+                      for (final c in clients)
+                        DropdownMenuItem(
+                          value: c.id,
+                          child: Text(c.displayName),
+                        ),
+                    ],
+                    onChanged: (v) => setState(() {
+                      _clientId = v;
+                      _allocByChargeId.clear();
+                      _allocSeed++;
+                    }),
+                  );
+                },
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _amountCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Amount received',
+                  border: OutlineInputBorder(),
+                ),
+                keyboardType: TextInputType.number,
+              ),
+              if (_clientId != null) ...[
+                const SizedBox(height: 16),
+                Text(
+                  'Apply to open charges',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Optional. Blank remainder stays unallocated on the receipt.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Builder(
+                  builder: (context) {
+                    final async = ref.watch(
+                      chargesWithOpenAmountProvider(_clientId!),
                     );
-                  },
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _amountCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Amount received',
-                    border: OutlineInputBorder(),
-                  ),
-                  keyboardType: TextInputType.number,
-                ),
-                if (_clientId != null) ...[
-                  const SizedBox(height: 16),
-                  Text(
-                    'Apply to open charges',
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Optional. Blank remainder stays unallocated on the receipt.',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                  ),
-                  const SizedBox(height: 8),
-                  Builder(
-                    builder: (context) {
-                      final async = ref.watch(
-                        chargesWithOpenAmountProvider(_clientId!),
-                      );
-                      return async.when(
-                        loading: () => const LinearProgressIndicator(),
-                        error: (e, _) => Text('$e'),
-                        data: (openCharges) {
-                          if (openCharges.isEmpty) {
-                            return Text(
-                              'No open charges with balance.',
-                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .onSurfaceVariant,
-                                  ),
-                            );
-                          }
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Align(
-                                alignment: Alignment.centerLeft,
-                                child: TextButton.icon(
-                                  onPressed: () =>
-                                      _fillOldestFirst(openCharges),
-                                  icon: const Icon(Icons.auto_fix_high_outlined),
-                                  label: const Text('Fill oldest first'),
+                    return async.when(
+                      loading: () => const LinearProgressIndicator(),
+                      error: (e, _) => Text('$e'),
+                      data: (openCharges) {
+                        if (openCharges.isEmpty) {
+                          return Text(
+                            'No open charges with balance.',
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant,
+                                ),
+                          );
+                        }
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: TextButton.icon(
+                                onPressed: () => _fillOldestFirst(openCharges),
+                                icon: const Icon(Icons.auto_fix_high_outlined),
+                                label: const Text('Fill oldest first'),
+                              ),
+                            ),
+                            for (final row in openCharges)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            row.charge.description ??
+                                                'Charge #${row.charge.id}',
+                                            style: Theme.of(
+                                              context,
+                                            ).textTheme.bodyMedium,
+                                          ),
+                                          Text(
+                                            'Open ${formatMoney(row.openMinor)} · '
+                                            '${row.charge.issuedAt.toLocal().toString().split(' ').first}',
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .bodySmall
+                                                ?.copyWith(
+                                                  color: Theme.of(context)
+                                                      .colorScheme
+                                                      .onSurfaceVariant,
+                                                ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    SizedBox(
+                                      width: 112,
+                                      child: _ChargeAllocationField(
+                                        chargeId: row.charge.id,
+                                        seed: _allocSeed,
+                                        initialText:
+                                            _allocByChargeId[row.charge.id] ??
+                                            '',
+                                        onChanged: (s) =>
+                                            _allocByChargeId[row.charge.id] = s,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
-                              for (final row in openCharges)
-                                Padding(
-                                  padding: const EdgeInsets.only(bottom: 8),
-                                  child: Row(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              row.charge.description ??
-                                                  'Charge #${row.charge.id}',
-                                              style: Theme.of(context)
-                                                  .textTheme
-                                                  .bodyMedium,
-                                            ),
-                                            Text(
-                                              'Open ${formatMoney(row.openMinor)} · '
-                                              '${row.charge.issuedAt.toLocal().toString().split(' ').first}',
-                                              style: Theme.of(context)
-                                                  .textTheme
-                                                  .bodySmall
-                                                  ?.copyWith(
-                                                    color: Theme.of(context)
-                                                        .colorScheme
-                                                        .onSurfaceVariant,
-                                                  ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      SizedBox(
-                                        width: 112,
-                                        child: _ChargeAllocationField(
-                                          chargeId: row.charge.id,
-                                          seed: _allocSeed,
-                                          initialText: _allocByChargeId[
-                                                  row.charge.id] ??
-                                              '',
-                                          onChanged: (s) =>
-                                              _allocByChargeId[row.charge.id] =
-                                                  s,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                            ],
-                          );
-                        },
-                      );
-                    },
-                  ),
-                ],
-                const SizedBox(height: 12),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Received date'),
-                  subtitle: Text(_date.toLocal().toString().split(' ').first),
-                  trailing: IconButton(
-                    tooltip: 'Pick date',
-                    onPressed: _pickDate,
-                    icon: const Icon(Icons.calendar_today_outlined),
-                  ),
-                ),
-                DropdownButtonFormField<PaymentMethod>(
-                  // ignore: deprecated_member_use
-                  value: _method,
-                  decoration: const InputDecoration(
-                    labelText: 'Method',
-                    border: OutlineInputBorder(),
-                  ),
-                  items: [
-                    for (final m in PaymentMethod.values)
-                      DropdownMenuItem(
-                        value: m,
-                        child: Text(m.name),
-                      ),
-                  ],
-                  onChanged: (v) =>
-                      setState(() => _method = v ?? PaymentMethod.cash),
-                ),
-                const SizedBox(height: 12),
-                accountsAsync.when(
-                  loading: () => const SizedBox.shrink(),
-                  error: (err, _) => const SizedBox.shrink(),
-                  data: (accounts) {
-                    return DropdownButtonFormField<int>(
-                      // ignore: deprecated_member_use
-                      value: _accountId,
-                      decoration: const InputDecoration(
-                        labelText: 'Deposit account',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: [
-                        for (final a in accounts)
-                          DropdownMenuItem(
-                            value: a.id,
-                            child: Text(a.name),
-                          ),
-                      ],
-                      onChanged: (v) => setState(() => _accountId = v),
+                          ],
+                        );
+                      },
                     );
                   },
-                ),
-                const SizedBox(height: 12),
-                categoriesAsync.when(
-                  loading: () => const SizedBox.shrink(),
-                  error: (err, _) => const SizedBox.shrink(),
-                  data: (categories) {
-                    return DropdownButtonFormField<int>(
-                      // ignore: deprecated_member_use
-                      value: _categoryId,
-                      decoration: const InputDecoration(
-                        labelText: 'Category',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: [
-                        for (final c in categories)
-                          DropdownMenuItem(
-                            value: c.id,
-                            child: Text(c.name),
-                          ),
-                      ],
-                      onChanged: (v) => setState(() => _categoryId = v),
-                    );
-                  },
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _refCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Reference',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _notesCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Notes',
-                    border: OutlineInputBorder(),
-                  ),
-                  maxLines: 2,
-                ),
-                const SizedBox(height: 24),
-                FilledButton(
-                  onPressed: _save,
-                  child: const Text('Post payment'),
                 ),
               ],
-            );
+              const SizedBox(height: 12),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Received date'),
+                subtitle: Text(_date.toLocal().toString().split(' ').first),
+                trailing: IconButton(
+                  tooltip: 'Pick date',
+                  onPressed: _pickDate,
+                  icon: const Icon(Icons.calendar_today_outlined),
+                ),
+              ),
+              DropdownButtonFormField<PaymentMethod>(
+                // ignore: deprecated_member_use
+                value: _method,
+                decoration: const InputDecoration(
+                  labelText: 'Method',
+                  border: OutlineInputBorder(),
+                ),
+                items: [
+                  for (final m in PaymentMethod.values)
+                    DropdownMenuItem(value: m, child: Text(m.name)),
+                ],
+                onChanged: (v) =>
+                    setState(() => _method = v ?? PaymentMethod.cash),
+              ),
+              const SizedBox(height: 12),
+              accountsAsync.when(
+                loading: () => const SizedBox.shrink(),
+                error: (err, _) => const SizedBox.shrink(),
+                data: (accounts) {
+                  return DropdownButtonFormField<int>(
+                    // ignore: deprecated_member_use
+                    value: _accountId,
+                    decoration: const InputDecoration(
+                      labelText: 'Deposit account',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: [
+                      for (final a in accounts)
+                        DropdownMenuItem(value: a.id, child: Text(a.name)),
+                    ],
+                    onChanged: (v) => setState(() => _accountId = v),
+                  );
+                },
+              ),
+              const SizedBox(height: 12),
+              categoriesAsync.when(
+                loading: () => const SizedBox.shrink(),
+                error: (err, _) => const SizedBox.shrink(),
+                data: (categories) {
+                  return DropdownButtonFormField<int>(
+                    // ignore: deprecated_member_use
+                    value: _categoryId,
+                    decoration: const InputDecoration(
+                      labelText: 'Category',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: [
+                      for (final c in categories)
+                        DropdownMenuItem(value: c.id, child: Text(c.name)),
+                    ],
+                    onChanged: (v) => setState(() => _categoryId = v),
+                  );
+                },
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _refCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Reference',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _notesCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Notes',
+                  border: OutlineInputBorder(),
+                ),
+                maxLines: 2,
+              ),
+              const SizedBox(height: 24),
+              FilledButton(onPressed: _save, child: const Text('Post payment')),
+            ],
+          );
         },
       ),
     );
@@ -469,8 +458,7 @@ class _ChargeAllocationField extends StatefulWidget {
   final ValueChanged<String> onChanged;
 
   @override
-  State<_ChargeAllocationField> createState() =>
-      _ChargeAllocationFieldState();
+  State<_ChargeAllocationField> createState() => _ChargeAllocationFieldState();
 }
 
 class _ChargeAllocationFieldState extends State<_ChargeAllocationField> {
