@@ -20,8 +20,28 @@ abstract final class BennetNav {
   static const List<BennetNavDestination> destinations = [
     BennetNavDestination(
       path: '/',
-      icon: Icons.dashboard_outlined,
-      label: 'Dashboard',
+      icon: Icons.insights_outlined,
+      label: 'Overview',
+    ),
+    BennetNavDestination(
+      path: '/clients',
+      icon: Icons.people_outline,
+      label: 'Clients',
+    ),
+    BennetNavDestination(
+      path: '/payments',
+      icon: Icons.payments_outlined,
+      label: 'Payments',
+    ),
+    BennetNavDestination(
+      path: '/charges',
+      icon: Icons.request_quote_outlined,
+      label: 'Charges',
+    ),
+    BennetNavDestination(
+      path: '/statements',
+      icon: Icons.description_outlined,
+      label: 'Statements',
     ),
     BennetNavDestination(
       path: '/transactions',
@@ -50,7 +70,7 @@ abstract final class BennetNav {
     ),
     BennetNavDestination(
       path: '/reports',
-      icon: Icons.description_outlined,
+      icon: Icons.analytics_outlined,
       label: 'Tax export',
     ),
     BennetNavDestination(
@@ -62,11 +82,16 @@ abstract final class BennetNav {
 
   static int selectedIndex(String uriPath) {
     if (uriPath == '/') return 0;
+    var bestIdx = 0;
+    var bestLen = -1;
     for (var i = 1; i < destinations.length; i++) {
       final p = destinations[i].path;
-      if (uriPath.startsWith(p)) return i;
+      if (uriPath.startsWith(p) && p.length > bestLen) {
+        bestLen = p.length;
+        bestIdx = i;
+      }
     }
-    return 0;
+    return bestLen >= 0 ? bestIdx : 0;
   }
 
   static bool _selected(String current, String path) =>

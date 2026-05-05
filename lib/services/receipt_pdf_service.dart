@@ -4,8 +4,17 @@ import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
+import '../domain/client_accounts.dart';
 import '../domain/entities.dart';
 import '../core/money.dart';
+
+int _allocTotalMinor(ReceiptDocument receipt) {
+  var s = 0;
+  for (final a in receipt.allocations) {
+    s += a.amountMinor;
+  }
+  return s;
+}
 
 Future<Uint8List> buildTransactionReceiptPdf({
   required LedgerTransaction transaction,
@@ -39,12 +48,15 @@ Future<Uint8List> buildTransactionReceiptPdf({
             pw.SizedBox(height: 8),
             pw.Text('Type: $typeStr'),
             pw.SizedBox(height: 8),
-            pw.Text('Category: ${transaction.categoryName ?? '—'}'),
+            pw.Text('Category: ${transaction.categoryName ?? '-'}'),
             pw.SizedBox(height: 8),
             pw.Text('Amount: $amountStr'),
             if (transaction.counterparty?.trim().isNotEmpty == true) ...[
               pw.SizedBox(height: 8),
-              pw.Text('Payee / payer: ${transaction.counterparty}'),
+              pw.Text(
+                'Payee / payer: ${transaction.counterparty}',
+                softWrap: true,
+              ),
             ],
             if (transaction.paymentMethod?.trim().isNotEmpty == true) ...[
               pw.SizedBox(height: 8),
@@ -53,7 +65,7 @@ Future<Uint8List> buildTransactionReceiptPdf({
             if (transaction.notes?.trim().isNotEmpty == true) ...[
               pw.SizedBox(height: 16),
               pw.Text('Notes:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-              pw.Text(transaction.notes!.trim()),
+              pw.Text(transaction.notes!.trim(), softWrap: true),
             ],
             pw.Spacer(),
             pw.Text(
@@ -67,3 +79,146 @@ Future<Uint8List> buildTransactionReceiptPdf({
   );
   return doc.save();
 }
+
+Future<Uint8List> buildClientPaymentReceiptPdf({
+  required ReceiptDocument receipt,
+}) async {
+  final doc = pw.Document();
+  final dateStr = DateFormat.yMMMd().format(receipt.issuedAt);
+  final amountStr = formatMoney(receipt.amountMinor);
+  final biz =
+      receipt.businessName?.trim().isNotEmpty == true
+          ? receipt.businessName!.trim()
+          : 'Receipt';
+
+  final allocSum = _allocTotalMinor(receipt);
+  final unallocated = receipt.amountMinor - allocSum;
+
+  doc.addPage(
+    pw.Page(
+      pageFormat: PdfPageFormat.standard,
+      build: (ctx) => pw.Padding(
+        padding: const pw.EdgeInsets.all(40),
+        child: pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            if (receipt.paymentReversed) ...[
+              pw.Container(
+                width: double.infinity,
+                padding: const pw.EdgeInsets.all(10),
+                decoration: pw.BoxDecoration(
+                  border: pw.Border.all(color: PdfColors.red800),
+                  color: PdfColors.red100,
+                ),
+                child: pw.Text(
+                  'This payment was reversed. This receipt is not valid for payment.',
+                  style: pw.TextStyle(
+                    fontSize: 11,
+                    fontWeight: pw.FontWeight.bold,
+                    color: PdfColors.red900,
+                  ),
+                  softWrap: true,
+                ),
+              ),
+              pw.SizedBox(height: 16),
+            ],
+            pw.Text(
+              biz,
+              style: pw.TextStyle(
+                fontSize: 22,
+                fontWeight: pw.FontWeight.bold,
+              ),
+            ),
+            pw.SizedBox(height: 16),
+            pw.Text(
+              'Receipt #${receipt.receiptNumber}',
+              style: pw.TextStyle(fontSize: 12, color: PdfColors.grey700),
+            ),
+            pw.SizedBox(height: 24),
+            pw.Text(
+              'Client: ${receipt.clientDisplayName}',
+              softWrap: true,
+            ),
+            pw.SizedBox(height: 8),
+            pw.Text(
+              'Code: ${receipt.clientCode}',
+              softWrap: true,
+            ),
+            pw.SizedBox(height: 8),
+            pw.Text('Date: $dateStr'),
+            pw.SizedBox(height: 8),
+            pw.Text('Payment method: ${receipt.method.name}'),
+            pw.SizedBox(height: 8),
+            pw.Text('Amount received: $amountStr'),
+            if (receipt.reference?.trim().isNotEmpty == true) ...[
+              pw.SizedBox(height: 8),
+              pw.Text(
+                'Reference: ${receipt.reference}',
+                softWrap: true,
+              ),
+            ],
+            if (receipt.allocations.isNotEmpty) ...[
+              pw.SizedBox(height: 16),
+              pw.Text(
+                'Allocations',
+                style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+              ),
+              pw.SizedBox(height: 6),
+              pw.Table(
+                border: pw.TableBorder.all(color: PdfColors.grey400),
+                columnWidths: {
+                  0: const pw.FlexColumnWidth(2),
+                  1: const pw.FlexColumnWidth(2),
+                },
+                children: [
+                  pw.TableRow(
+                    decoration: const pw.BoxDecoration(color: PdfColors.grey300),
+                    children: [
+                      _hdr('Charge'),
+                      _hdr('Applied'),
+                    ],
+                  ),
+                  for (final a in receipt.allocations)
+                    pw.TableRow(
+                      children: [
+                        _cell('#${a.chargeId}'),
+                        _cell(formatMoney(a.amountMinor)),
+                      ],
+                    ),
+                ],
+              ),
+            ],
+            if (unallocated > 0) ...[
+              pw.SizedBox(height: 8),
+              pw.Text(
+                'Unallocated on receipt: ${formatMoney(unallocated)}',
+                style: pw.TextStyle(fontSize: 11, color: PdfColors.grey800),
+              ),
+            ],
+            if (receipt.notes?.trim().isNotEmpty == true) ...[
+              pw.SizedBox(height: 16),
+              pw.Text('Notes:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+              pw.Text(receipt.notes!.trim(), softWrap: true),
+            ],
+            pw.Spacer(),
+            pw.Text(
+              'Generated by Bennet',
+              style: pw.TextStyle(fontSize: 10, color: PdfColors.grey700),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+  return doc.save();
+}
+
+pw.Widget _hdr(String s) => pw.Padding(
+      padding: const pw.EdgeInsets.all(6),
+      child: pw.Text(s, style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+    );
+
+pw.Widget _cell(String s) => pw.Padding(
+      padding: const pw.EdgeInsets.all(6),
+      child: pw.Text(s, softWrap: true),
+    );

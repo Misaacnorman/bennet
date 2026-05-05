@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../domain/entities.dart';
 import '../domain/ledger_repository.dart';
+import 'backend_config.dart';
 import '../data/database/sqlite_init.dart';
 import '../data/ledger_repository_impl.dart';
 import '../data/firebase/firestore_ledger_repository.dart';
@@ -22,6 +23,10 @@ final currentUidProvider = Provider<String?>((ref) {
 });
 
 final ledgerRepositoryProvider = FutureProvider<LedgerRepository>((ref) async {
+  if (kUseSqliteBackend) {
+    ensureSqlitePlatformInitialized();
+    return openSqliteLedger();
+  }
   final uid = ref.watch(currentUidProvider);
   if (uid == null) throw StateError('Not signed in');
   final repo = FirestoreLedgerRepository(uid: uid);
@@ -108,7 +113,8 @@ extension LedgerRepoX on WidgetRef {
       read(ledgerRepositoryProvider.future);
 }
 
-/// Opens local SQLite ledger (no Firebase). Use with `USE_SQLITE=true` from main.dart overrides only.
+/// Opens local SQLite ledger (no Firestore).
+/// Enable alongside [`ClientAccountRepositoryImpl`] via `--dart-define=USE_SQLITE=true`.
 Future<LedgerRepository> openSqliteLedger() async {
   ensureSqlitePlatformInitialized();
   return LedgerRepositoryImpl.open();
