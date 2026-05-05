@@ -15,7 +15,7 @@ class BennetNavDestination {
   final String label;
 }
 
-/// Single source for drawer + [NavigationRail] destinations.
+/// Single source for sidebar destinations.
 abstract final class BennetNav {
   static const List<BennetNavDestination> destinations = [
     BennetNavDestination(
@@ -136,7 +136,185 @@ class AppDrawer extends StatelessWidget {
   }
 }
 
-class BennetScaffold extends StatelessWidget {
+class _ResponsiveSidebar extends StatelessWidget {
+  const _ResponsiveSidebar({required this.collapsed, required this.onToggle});
+
+  static const double _collapsedWidth = 56;
+  static const double _expandedWidth = 216;
+  static const double _notchWidth = 28;
+
+  final bool collapsed;
+  final VoidCallback onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    final loc = GoRouterState.of(context).uri.path;
+    final scheme = Theme.of(context).colorScheme;
+    final panelWidth = collapsed ? _collapsedWidth : _expandedWidth;
+    final notchOverlap = _notchWidth / 2;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOutCubic,
+      width: panelWidth + notchOverlap,
+      child: Stack(
+        children: [
+          Positioned.fill(
+            right: notchOverlap,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: scheme.surfaceContainerLow,
+                border: Border(right: BorderSide(color: scheme.outlineVariant)),
+              ),
+              child: SafeArea(
+                right: false,
+                child: Column(
+                  children: [
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(
+                        collapsed ? 8 : 14,
+                        12,
+                        8,
+                        8,
+                      ),
+                      child: SizedBox(
+                        height: 34,
+                        child: Row(
+                          mainAxisAlignment: collapsed
+                              ? MainAxisAlignment.center
+                              : MainAxisAlignment.start,
+                          children: [
+                            if (collapsed)
+                              Text(
+                                'B',
+                                style: Theme.of(context).textTheme.titleMedium
+                                    ?.copyWith(fontWeight: FontWeight.w800),
+                              )
+                            else
+                              Expanded(
+                                child: Text(
+                                  'Bennet',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context).textTheme.titleMedium
+                                      ?.copyWith(fontWeight: FontWeight.w800),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: ListView.builder(
+                        padding: const EdgeInsets.fromLTRB(7, 4, 7, 12),
+                        itemCount: BennetNav.destinations.length,
+                        itemBuilder: (context, i) {
+                          final d = BennetNav.destinations[i];
+                          final selected = BennetNav._selected(loc, d.path);
+                          final item = Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 1),
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(8),
+                              onTap: () => context.go(d.path),
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 140),
+                                curve: Curves.easeOut,
+                                height: 38,
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: collapsed ? 0 : 10,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: selected
+                                      ? scheme.primaryContainer.withValues(
+                                          alpha: 0.75,
+                                        )
+                                      : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: collapsed
+                                      ? MainAxisAlignment.center
+                                      : MainAxisAlignment.start,
+                                  children: [
+                                    Icon(
+                                      d.icon,
+                                      size: 17,
+                                      color: selected
+                                          ? scheme.onPrimaryContainer
+                                          : scheme.onSurfaceVariant,
+                                    ),
+                                    if (!collapsed) ...[
+                                      const SizedBox(width: 9),
+                                      Expanded(
+                                        child: Text(
+                                          d.label,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodyMedium
+                                              ?.copyWith(
+                                                color: selected
+                                                    ? scheme.onPrimaryContainer
+                                                    : scheme.onSurface,
+                                                fontWeight: selected
+                                                    ? FontWeight.w700
+                                                    : FontWeight.w600,
+                                              ),
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+
+                          if (!collapsed) return item;
+                          return Tooltip(
+                            message: d.label,
+                            waitDuration: const Duration(milliseconds: 450),
+                            child: item,
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            right: 0,
+            top: 54,
+            child: Material(
+              color: scheme.surface,
+              elevation: 2,
+              shape: StadiumBorder(
+                side: BorderSide(color: scheme.outlineVariant),
+              ),
+              child: InkWell(
+                customBorder: const StadiumBorder(),
+                onTap: onToggle,
+                child: SizedBox(
+                  width: _notchWidth,
+                  height: 44,
+                  child: Icon(
+                    collapsed ? Icons.chevron_right : Icons.chevron_left,
+                    size: 18,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class BennetScaffold extends StatefulWidget {
   const BennetScaffold({
     super.key,
     required this.title,
@@ -155,56 +333,39 @@ class BennetScaffold extends StatelessWidget {
   final ContentWidthMode contentWidth;
 
   @override
+  State<BennetScaffold> createState() => _BennetScaffoldState();
+}
+
+class _BennetScaffoldState extends State<BennetScaffold> {
+  bool? _sidebarCollapsedOverride;
+
+  @override
   Widget build(BuildContext context) {
-    final wrappedBody = ResponsiveContent(mode: contentWidth, child: body);
+    final wrappedBody = ResponsiveContent(
+      mode: widget.contentWidth,
+      child: widget.body,
+    );
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final showRail = constraints.maxWidth >= Breakpoints.medium;
-        if (!showRail) {
-          return Scaffold(
-            appBar: AppBar(title: Text(title), actions: actions),
-            drawer: const AppDrawer(),
-            body: wrappedBody,
-            floatingActionButton: fab,
-          );
-        }
-
-        final loc = GoRouterState.of(context).uri.path;
-        final idx = BennetNav.selectedIndex(loc);
+        final collapsed =
+            _sidebarCollapsedOverride ??
+            constraints.maxWidth < Breakpoints.expanded;
 
         return Scaffold(
-          appBar: AppBar(title: Text(title), actions: actions),
+          appBar: AppBar(title: Text(widget.title), actions: widget.actions),
           body: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              NavigationRail(
-                selectedIndex: idx,
-                onDestinationSelected: (i) =>
-                    context.go(BennetNav.destinations[i].path),
-                labelType: NavigationRailLabelType.all,
-                leading: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  child: Text(
-                    'Bennet',
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                destinations: [
-                  for (final d in BennetNav.destinations)
-                    NavigationRailDestination(
-                      icon: Icon(d.icon),
-                      label: Text(d.label),
-                    ),
-                ],
+              _ResponsiveSidebar(
+                collapsed: collapsed,
+                onToggle: () =>
+                    setState(() => _sidebarCollapsedOverride = !collapsed),
               ),
-              const VerticalDivider(width: 1, thickness: 1),
               Expanded(child: wrappedBody),
             ],
           ),
-          floatingActionButton: fab,
+          floatingActionButton: widget.fab,
         );
       },
     );

@@ -4,7 +4,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
 
 const _dbName = 'bennet.db';
-const dbVersion = 3;
+const dbVersion = 4;
 
 Future<String> bennetDatabasePath() async {
   final dir = await getApplicationDocumentsDirectory();
@@ -203,12 +203,35 @@ CREATE TABLE client_receipts (
 )''');
 }
 
-/// Full v3 schema for a new database (tests and [openBennetDatabase] `onCreate`).
+/// Performance indexes for ledger summary and cash-book queries (migration v4).
+Future<void> installLedgerPerformanceIndexesV4(Database db) async {
+  await db.execute(
+    'CREATE INDEX IF NOT EXISTS idx_tx_book_occurred ON transactions(book_id, occurred_at)',
+  );
+  await db.execute(
+    'CREATE INDEX IF NOT EXISTS idx_tx_account_occurred ON transactions(account_id, occurred_at)',
+  );
+  await db.execute(
+    'CREATE INDEX IF NOT EXISTS idx_period_openings_book_period ON period_openings(book_id, year DESC, month DESC)',
+  );
+  await db.execute(
+    'CREATE INDEX IF NOT EXISTS idx_balance_sheet_book_order ON balance_sheet_items(book_id, section, sort_order, id)',
+  );
+}
+
+/// Full v3 schema for a new database (tests and older migrations).
 @visibleForTesting
 Future<void> createBennetDatabaseSchemaV3(Database db) async {
   await _createLedgerTablesAndSeed(db);
   await installClientAccountsSchemaV2(db);
   await installClientReceiptsSchemaV3(db);
+}
+
+/// Full v4 schema for new databases.
+@visibleForTesting
+Future<void> createBennetDatabaseSchemaV4(Database db) async {
+  await createBennetDatabaseSchemaV3(db);
+  await installLedgerPerformanceIndexesV4(db);
 }
 
 Future<Database> openBennetDatabase() async {
@@ -226,9 +249,12 @@ Future<Database> openBennetDatabase() async {
       if (oldVersion < 3) {
         await installClientReceiptsSchemaV3(db);
       }
+      if (oldVersion < 4) {
+        await installLedgerPerformanceIndexesV4(db);
+      }
     },
     onCreate: (db, version) async {
-      await createBennetDatabaseSchemaV3(db);
+      await createBennetDatabaseSchemaV4(db);
     },
   );
 }

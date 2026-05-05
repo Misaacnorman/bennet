@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart' hide Category;
 
-import '../../core/period_math.dart';
 import '../../domain/entities.dart';
 import '../../domain/ledger_repository.dart';
 
@@ -228,13 +228,14 @@ class FirestoreLedgerRepository implements LedgerRepository {
     int? accountId,
   }) async {
     await ensureBootstrap();
-    final catNames = await _categoryNames();
-    final accNames = await _accountNames();
-    final snap = await _transactionsQuery(
-      year: year,
-      month: month,
-      accountId: accountId,
-    ).get();
+    final results = await Future.wait<Object>([
+      _categoryNames(),
+      _accountNames(),
+      _transactionsQuery(year: year, month: month, accountId: accountId).get(),
+    ]);
+    final catNames = results[0] as Map<int, String>;
+    final accNames = results[1] as Map<int, String>;
+    final snap = results[2] as QuerySnapshot<Map<String, dynamic>>;
     return snap.docs.map((d) => _txFromDoc(d, catNames, accNames)).toList();
   }
 
@@ -328,6 +329,7 @@ class FirestoreLedgerRepository implements LedgerRepository {
       'openingMinor': minor,
       'year': year,
       'month': month,
+      'periodIndex': year * 12 + month,
     }, SetOptions(merge: true));
   }
 
@@ -335,31 +337,60 @@ class FirestoreLedgerRepository implements LedgerRepository {
     int year,
     int month,
   ) async {
-    var y = year;
-    var m = month;
-    // Firestore rejects compound queries on __name__ without a composite index; point reads avoid that.
-    const maxSteps = 2400;
-    for (var step = 0; step < maxSteps; step++) {
-      final doc = await _periodOpenings.doc(_periodKey(y, m)).get();
-      if (doc.exists) {
-        final data = doc.data()!;
-        return (
-          monthStart: DateTime(data['year'] as int, data['month'] as int),
-          openingMinor: (data['openingMinor'] as num).toInt(),
-        );
-      }
-      if (m == 1) {
-        y--;
-        m = 12;
-        if (y < 1970) break;
-      } else {
-        m--;
+    final targetPeriod = year * 12 + month;
+
+    final exact = await _periodOpenings.doc(_periodKey(year, month)).get();
+    if (exact.exists) return _openingFromData(exact.data()!);
+
+    final latestWithIndex = await _periodOpenings
+        .where('periodIndex', isLessThanOrEqualTo: targetPeriod)
+        .orderBy('periodIndex', descending: true)
+        .limit(1)
+        .get();
+    if (latestWithIndex.docs.isNotEmpty) {
+      return _openingFromData(latestWithIndex.docs.first.data());
+    }
+
+    // Legacy period opening docs may not have periodIndex yet.
+    final snap = await _periodOpenings.get();
+    ({DateTime monthStart, int openingMinor})? latest;
+    var latestPeriod = -1;
+    for (final doc in snap.docs) {
+      final opening = _openingFromData(doc.data());
+      final period = opening.monthStart.year * 12 + opening.monthStart.month;
+      if (period <= targetPeriod && period > latestPeriod) {
+        latest = opening;
+        latestPeriod = period;
       }
     }
-    return null;
+    return latest;
   }
 
-  Future<int> _netTransactionsBefore(DateTime to, {DateTime? from}) async {
+  ({DateTime monthStart, int openingMinor}) _openingFromData(
+    Map<String, dynamic> data,
+  ) {
+    final openingYear = data['year'] as int;
+    final openingMonth = data['month'] as int;
+    return (
+      monthStart: DateTime(openingYear, openingMonth),
+      openingMinor: (data['openingMinor'] as num).toInt(),
+    );
+  }
+
+  bool get _canUseServerSumAggregates {
+    if (kIsWeb) return true;
+    return switch (defaultTargetPlatform) {
+      TargetPlatform.android ||
+      TargetPlatform.iOS ||
+      TargetPlatform.macOS => true,
+      _ => false,
+    };
+  }
+
+  Query<Map<String, dynamic>> _transactionRangeQuery({
+    DateTime? from,
+    required DateTime to,
+  }) {
     Query<Map<String, dynamic>> q = _transactions.where(
       'occurredAt',
       isLessThan: Timestamp.fromDate(to),
@@ -370,15 +401,79 @@ class FirestoreLedgerRepository implements LedgerRepository {
         isGreaterThanOrEqualTo: Timestamp.fromDate(from),
       );
     }
+    return q;
+  }
 
-    final snap = await q.get();
-    var net = 0;
+  Query<Map<String, dynamic>> _transactionAmountQuery({
+    DateTime? from,
+    required DateTime to,
+    required TxType type,
+  }) {
+    final q = _transactionRangeQuery(from: from, to: to);
+    return q.where('type', isEqualTo: type.name);
+  }
+
+  Future<int> _sumTransactionAmounts({
+    DateTime? from,
+    required DateTime to,
+    required TxType type,
+  }) async {
+    final q = _transactionAmountQuery(from: from, to: to, type: type);
+    final aggregate = await q.aggregate(sum('amountMinor')).get();
+    return (aggregate.getSum('amountMinor') ?? 0).round();
+  }
+
+  Future<({int incomeMinor, int expenseMinor, int netMinor})>
+  _transactionTotalsByReadingRange({
+    DateTime? from,
+    required DateTime to,
+  }) async {
+    final snap = await _transactionRangeQuery(from: from, to: to).get();
+    var income = 0;
+    var expense = 0;
     for (final d in snap.docs) {
       final m = d.data();
       final amount = (m['amountMinor'] as num).toInt();
-      net += m['type'] == TxType.income.name ? amount : -amount;
+      if (m['type'] == TxType.income.name) {
+        income += amount;
+      } else {
+        expense += amount;
+      }
     }
-    return net;
+    return (
+      incomeMinor: income,
+      expenseMinor: expense,
+      netMinor: income - expense,
+    );
+  }
+
+  Future<({int incomeMinor, int expenseMinor, int netMinor})>
+  _transactionTotals({DateTime? from, required DateTime to}) async {
+    if (_canUseServerSumAggregates) {
+      try {
+        final totals = await Future.wait<int>([
+          _sumTransactionAmounts(from: from, to: to, type: TxType.income),
+          _sumTransactionAmounts(from: from, to: to, type: TxType.expense),
+        ]);
+        final income = totals[0];
+        final expense = totals[1];
+        return (
+          incomeMinor: income,
+          expenseMinor: expense,
+          netMinor: income - expense,
+        );
+      } catch (_) {
+        // Fall back to document reads when aggregate sums are unavailable or
+        // an index has not been deployed yet.
+      }
+    }
+
+    return _transactionTotalsByReadingRange(from: from, to: to);
+  }
+
+  Future<int> _netTransactionsBefore(DateTime to, {DateTime? from}) async {
+    final totals = await _transactionTotals(from: from, to: to);
+    return totals.netMinor;
   }
 
   @override
@@ -394,13 +489,12 @@ class FirestoreLedgerRepository implements LedgerRepository {
 
   @override
   Future<MonthlySummary> monthlySummary(int bookId, int year, int month) async {
-    final opening = await resolveOpeningMinor(bookId, year, month);
-    final txs = await listTransactions(
-      bookId: bookId,
-      year: year,
-      month: month,
-    );
-    final totals = totalsForMonth(txs, year, month);
+    final start = DateTime(year, month);
+    final end = DateTime(year, month + 1);
+    final openingFuture = resolveOpeningMinor(bookId, year, month);
+    final totalsFuture = _transactionTotals(from: start, to: end);
+    final opening = await openingFuture;
+    final totals = await totalsFuture;
     final closing = opening + totals.netMinor;
     return MonthlySummary(
       openingMinor: opening,

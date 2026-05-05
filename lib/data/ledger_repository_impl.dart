@@ -1,6 +1,5 @@
 import 'package:sqflite/sqflite.dart';
 
-import '../core/period_math.dart';
 import 'database/sqlite_db.dart';
 import '../domain/entities.dart';
 import '../domain/ledger_repository.dart';
@@ -293,6 +292,35 @@ WHERE ${where.join(' AND ')}
     return rows.first['net'] as int;
   }
 
+  Future<({int incomeMinor, int expenseMinor, int netMinor})> _monthlyTotals(
+    int bookId,
+    int year,
+    int month,
+  ) async {
+    final start = DateTime(year, month).millisecondsSinceEpoch;
+    final end = DateTime(year, month + 1).millisecondsSinceEpoch;
+    final rows = await _db.rawQuery(
+      '''
+SELECT
+  COALESCE(SUM(CASE WHEN type = 'income' THEN amount_minor ELSE 0 END), 0) AS income,
+  COALESCE(SUM(CASE WHEN type = 'expense' THEN amount_minor ELSE 0 END), 0) AS expense
+FROM transactions
+WHERE book_id = ?
+  AND occurred_at >= ?
+  AND occurred_at < ?
+''',
+      [bookId, start, end],
+    );
+    final row = rows.first;
+    final income = (row['income'] as num).toInt();
+    final expense = (row['expense'] as num).toInt();
+    return (
+      incomeMinor: income,
+      expenseMinor: expense,
+      netMinor: income - expense,
+    );
+  }
+
   @override
   Future<int> resolveOpeningMinor(int bookId, int year, int month) async {
     final targetStart = DateTime(year, month);
@@ -307,13 +335,10 @@ WHERE ${where.join(' AND ')}
 
   @override
   Future<MonthlySummary> monthlySummary(int bookId, int year, int month) async {
-    final opening = await resolveOpeningMinor(bookId, year, month);
-    final txs = await listTransactions(
-      bookId: bookId,
-      year: year,
-      month: month,
-    );
-    final totals = totalsForMonth(txs, year, month);
+    final openingFuture = resolveOpeningMinor(bookId, year, month);
+    final totalsFuture = _monthlyTotals(bookId, year, month);
+    final opening = await openingFuture;
+    final totals = await totalsFuture;
     final closing = opening + totals.netMinor;
     return MonthlySummary(
       openingMinor: opening,

@@ -42,17 +42,20 @@ class _MonthlySummaryScreenState extends ConsumerState<MonthlySummaryScreen> {
       _month.year,
       _month.month,
     );
+    if (!mounted) return;
+    if (explicit != null) {
+      _openingCtrl.text = (explicit / 100).toStringAsFixed(2);
+      setState(() {});
+      return;
+    }
+
     final resolved = await repo.resolveOpeningMinor(
       book.id,
       _month.year,
       _month.month,
     );
     if (!mounted) return;
-    if (explicit != null) {
-      _openingCtrl.text = (explicit / 100).toStringAsFixed(2);
-    } else {
-      _openingCtrl.text = (resolved / 100).toStringAsFixed(2);
-    }
+    _openingCtrl.text = (resolved / 100).toStringAsFixed(2);
     setState(() {});
   }
 
