@@ -5,16 +5,7 @@
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "accountId", "order": "ASCENDING" },
-        { "fieldPath": "occurredAt", "order": "ASCENDING" },
-        { "fieldPath": "__name__", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "transactions",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "occurredAt", "order": "ASCENDING" },
-        { "fieldPath": "__name__", "order": "ASCENDING" }
+        { "fieldPath": "occurredAt", "order": "ASCENDING" }
       ]
     },
     {
