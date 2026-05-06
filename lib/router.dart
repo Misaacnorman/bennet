@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'application/backend_config.dart';
 import 'presentation/screens/balance_sheet_screen.dart';
 import 'presentation/screens/cash_book_screen.dart';
+import 'presentation/screens/charges/charge_detail_screen.dart';
 import 'presentation/screens/charges/charge_edit_screen.dart';
 import 'presentation/screens/charges/charge_list_screen.dart';
 import 'presentation/screens/charges/charge_pick_client_screen.dart';
@@ -17,17 +18,24 @@ import 'presentation/screens/login_screen.dart';
 import 'presentation/screens/monthly_summary_screen.dart';
 import 'presentation/screens/overview_screen.dart';
 import 'presentation/screens/payments/payment_detail_screen.dart';
+import 'presentation/screens/payments/receipt_preview_screen.dart';
 import 'presentation/screens/payments/payment_edit_screen.dart';
 import 'presentation/screens/payments/payment_list_screen.dart';
 import 'presentation/screens/reconciliation_screen.dart';
 import 'presentation/screens/settings_screen.dart';
 import 'presentation/screens/statements/statement_builder_screen.dart';
+import 'presentation/screens/statements/statement_detail_screen.dart';
 import 'presentation/screens/statements/statement_history_screen.dart';
 import 'presentation/screens/signup_screen.dart';
 import 'presentation/screens/tax_export_screen.dart';
 import 'presentation/screens/transaction_edit_screen.dart';
 import 'presentation/screens/transaction_list_screen.dart';
 import 'router_refresh.dart';
+
+Widget _invalidRoute(String message) =>
+    Scaffold(body: Center(child: Text(message)));
+
+int? _routeId(String? raw) => int.tryParse(raw ?? '');
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'root');
 
@@ -49,14 +57,18 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       if (kUseSqliteBackend) return null;
       final loggedIn = FirebaseAuth.instance.currentUser != null;
       final onAuthPage =
-          state.matchedLocation == '/login' || state.matchedLocation == '/signup';
+          state.matchedLocation == '/login' ||
+          state.matchedLocation == '/signup';
       if (!loggedIn && !onAuthPage) return '/login';
       if (loggedIn && onAuthPage) return '/';
       return null;
     },
     routes: [
       GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
-      GoRoute(path: '/signup', builder: (context, state) => const SignupScreen()),
+      GoRoute(
+        path: '/signup',
+        builder: (context, state) => const SignupScreen(),
+      ),
       GoRoute(path: '/', builder: (context, state) => const OverviewScreen()),
       GoRoute(
         path: '/dashboard',
@@ -73,35 +85,40 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/clients/:id',
         builder: (context, state) {
-          final id = int.parse(state.pathParameters['id']!);
+          final id = _routeId(state.pathParameters['id']);
+          if (id == null) return _invalidRoute('Invalid client');
           return ClientDetailScreen(clientId: id);
         },
       ),
       GoRoute(
         path: '/clients/:id/edit',
         builder: (context, state) {
-          final id = int.parse(state.pathParameters['id']!);
+          final id = _routeId(state.pathParameters['id']);
+          if (id == null) return _invalidRoute('Invalid client');
           return ClientEditScreen(clientId: id);
         },
       ),
       GoRoute(
         path: '/clients/:id/payment/new',
         builder: (context, state) {
-          final id = int.parse(state.pathParameters['id']!);
+          final id = _routeId(state.pathParameters['id']);
+          if (id == null) return _invalidRoute('Invalid client');
           return PaymentEditScreen(clientId: id);
         },
       ),
       GoRoute(
         path: '/clients/:id/charge/new',
         builder: (context, state) {
-          final id = int.parse(state.pathParameters['id']!);
+          final id = _routeId(state.pathParameters['id']);
+          if (id == null) return _invalidRoute('Invalid client');
           return ChargeEditScreen(clientId: id);
         },
       ),
       GoRoute(
         path: '/clients/:id/statement',
         builder: (context, state) {
-          final id = int.parse(state.pathParameters['id']!);
+          final id = _routeId(state.pathParameters['id']);
+          if (id == null) return _invalidRoute('Invalid client');
           return StatementBuilderScreen(clientId: id);
         },
       ),
@@ -116,8 +133,17 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/payments/:id',
         builder: (context, state) {
-          final id = int.parse(state.pathParameters['id']!);
+          final id = _routeId(state.pathParameters['id']);
+          if (id == null) return _invalidRoute('Invalid payment');
           return PaymentDetailScreen(paymentId: id);
+        },
+      ),
+      GoRoute(
+        path: '/receipts/:paymentId',
+        builder: (context, state) {
+          final id = _routeId(state.pathParameters['paymentId']);
+          if (id == null) return _invalidRoute('Invalid receipt');
+          return ReceiptPreviewScreen(paymentId: id);
         },
       ),
       GoRoute(
@@ -129,8 +155,24 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const ChargePickClientScreen(),
       ),
       GoRoute(
+        path: '/charges/:id',
+        builder: (context, state) {
+          final id = _routeId(state.pathParameters['id']);
+          if (id == null) return _invalidRoute('Invalid charge');
+          return ChargeDetailScreen(chargeId: id);
+        },
+      ),
+      GoRoute(
         path: '/statements',
         builder: (context, state) => const StatementHistoryScreen(),
+      ),
+      GoRoute(
+        path: '/statements/:id',
+        builder: (context, state) {
+          final id = _routeId(state.pathParameters['id']);
+          if (id == null) return _invalidRoute('Invalid statement');
+          return StatementDetailScreen(statementId: id);
+        },
       ),
       GoRoute(
         path: '/transactions',
@@ -143,7 +185,8 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/transactions/:id',
         builder: (context, state) {
-          final id = int.parse(state.pathParameters['id']!);
+          final id = _routeId(state.pathParameters['id']);
+          if (id == null) return _invalidRoute('Invalid transaction');
           return TransactionEditScreen(transactionId: id);
         },
       ),

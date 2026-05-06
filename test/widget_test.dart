@@ -38,7 +38,8 @@ void main() {
     await tester.pumpWidget(MaterialApp.router(routerConfig: router));
     await tester.pumpAndSettle();
 
-    expect(find.byIcon(Icons.chevron_left), findsOneWidget);
+    // Collapse notch and the active nav row each show a chevron at route `/`.
+    expect(find.byIcon(Icons.chevron_left), findsWidgets);
     expect(find.text('Bennet'), findsOneWidget);
     expect(find.text('Overview'), findsOneWidget);
     expect(find.byIcon(Icons.insights_outlined), findsOneWidget);

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../layout/responsive_content.dart';
+import '../theme/app_design_tokens.dart';
 
 class PageHeader extends StatelessWidget {
   const PageHeader({
@@ -17,50 +18,85 @@ class PageHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return LayoutBuilder(
-      builder: (context, c) {
-        final narrow = c.maxWidth < Breakpoints.compact;
-        final titleBlock = Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              title,
-              style: theme.textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
+    final scheme = theme.colorScheme;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: LayoutBuilder(
+        builder: (context, c) {
+          final narrow = c.maxWidth < Breakpoints.compact;
+
+          final accentRow = Container(
+            margin: const EdgeInsets.only(bottom: 10),
+            height: 3,
+            decoration: BoxDecoration(
+              color: scheme.primary.withValues(alpha: 0.22),
+              borderRadius: BorderRadius.circular(999),
             ),
-            if (subtitle != null) ...[
-              const SizedBox(height: 4),
+          );
+
+          final titleBlock = Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(width: 56, child: accentRow),
               Text(
-                subtitle!,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
+                title,
+                style: theme.textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  color: scheme.onSurface,
+                  letterSpacing: -0.2,
                 ),
               ),
-            ],
-          ],
-        );
-        if (narrow) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              titleBlock,
-              if (actions != null && actions!.isNotEmpty) ...[
-                const SizedBox(height: 12),
-                Wrap(spacing: 8, runSpacing: 8, children: actions!),
+              if (subtitle != null) ...[
+                const SizedBox(height: 6),
+                Text(
+                  subtitle!,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                    height: 1.35,
+                  ),
+                ),
               ],
             ],
           );
-        }
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(child: titleBlock),
-            if (actions != null && actions!.isNotEmpty)
-              Wrap(spacing: 8, children: actions!),
-          ],
-        );
-      },
+
+          if (narrow) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                titleBlock,
+                if (actions != null && actions!.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  Wrap(
+                    spacing: AppSpacing.fieldGap,
+                    runSpacing: AppSpacing.fieldGap,
+                    children: actions!,
+                  ),
+                ],
+              ],
+            );
+          }
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: titleBlock),
+                  if (actions != null && actions!.isNotEmpty)
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      alignment: WrapAlignment.end,
+                      children: actions!,
+                    ),
+                ],
+              ),
+            ],
+          );
+        },
+      ),
     );
   }
 }

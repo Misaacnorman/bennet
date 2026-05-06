@@ -50,6 +50,16 @@ class FirestoreClientAccountRepository implements ClientAccountRepository {
   DocumentReference<Map<String, dynamic>> get _metaClient =>
       _bookDoc.collection('_meta').doc('clientAccounts');
 
+  CollectionReference<Map<String, dynamic>> get _clientCodeIndex =>
+      _bookDoc.collection('clientCodeIndex');
+
+  /// Normalized key for [clientCodeIndex] document ids (uppercase, safe chars).
+  static String _normalizeClientCodeKey(String raw) {
+    final t = raw.trim().toUpperCase();
+    if (t.isEmpty) return 'EMPTY';
+    return t.replaceAll(RegExp(r'[^A-Z0-9_-]'), '_');
+  }
+
   static int _tsMs(Timestamp? t) =>
       t?.millisecondsSinceEpoch ??
       DateTime.now().toUtc().millisecondsSinceEpoch;
@@ -171,6 +181,10 @@ class FirestoreClientAccountRepository implements ClientAccountRepository {
       closingBalanceMinor: (m['closingBalanceMinor'] as num).toInt(),
       issuedAtMs: _tsMs(m['issuedAt'] as Timestamp?),
       statementNumber: (m['statementNumber'] as num).toInt(),
+      businessNameSnap: m['businessNameSnap'] as String?,
+      clientDisplayNameSnap: m['clientDisplayNameSnap'] as String?,
+      clientCodeSnap: m['clientCodeSnap'] as String?,
+      linesJson: m['linesJson'] as String?,
     );
   }
 
@@ -269,33 +283,52 @@ class FirestoreClientAccountRepository implements ClientAccountRepository {
 
   @override
   Future<int> createClient(CreateClientInput input) async {
-    final id = await _allocate('nextClientId', 1);
+    await _ensureMeta();
+    final norm = _normalizeClientCodeKey(input.clientCode);
     final now = FieldValue.serverTimestamp();
-    await _clients.doc('$id').set({
-      'clientCode': input.clientCode.trim(),
-      'displayName': input.displayName.trim(),
-      'legalName': input.legalName?.trim(),
-      'status': ClientStatus.active.name,
-      'primaryEmail': input.primaryEmail?.trim(),
-      'primaryPhone': input.primaryPhone?.trim(),
-      'notes': input.notes?.trim(),
-      'openingBalanceMinor': input.openingBalanceMinor,
-      'openingBalanceDate': input.openingBalanceDate != null
-          ? Timestamp.fromDate(input.openingBalanceDate!)
-          : null,
-      'defaultCategoryId': input.defaultCategoryId,
-      'defaultAccountId': input.defaultAccountId,
-      'createdAt': now,
-      'updatedAt': now,
+
+    return _db.runTransaction<int>((txn) async {
+      final idxRef = _clientCodeIndex.doc(norm);
+      final idxSnap = await txn.get(idxRef);
+      if (idxSnap.exists) {
+        throw StateError('Client code already exists.');
+      }
+      final metaSnap = await txn.get(_metaClient);
+      final data = metaSnap.data() ?? {};
+      final id = (data['nextClientId'] as num?)?.toInt() ?? 1;
+      txn.set(_metaClient, {'nextClientId': id + 1}, SetOptions(merge: true));
+      txn.set(idxRef, {'clientId': id});
+      txn.set(_clients.doc('$id'), {
+        'clientCode': input.clientCode.trim(),
+        'displayName': input.displayName.trim(),
+        'legalName': input.legalName?.trim(),
+        'status': ClientStatus.active.name,
+        'primaryEmail': input.primaryEmail?.trim(),
+        'primaryPhone': input.primaryPhone?.trim(),
+        'notes': input.notes?.trim(),
+        'openingBalanceMinor': input.openingBalanceMinor,
+        'openingBalanceDate': input.openingBalanceDate != null
+            ? Timestamp.fromDate(input.openingBalanceDate!)
+            : null,
+        'defaultCategoryId': input.defaultCategoryId,
+        'defaultAccountId': input.defaultAccountId,
+        'createdAt': now,
+        'updatedAt': now,
+      });
+      return id;
     });
-    return id;
   }
 
   @override
   Future<void> updateClient(UpdateClientInput input) async {
+    await _ensureMeta();
     final ref = _clients.doc('${input.id}');
     final snap = await ref.get();
     if (!snap.exists) throw StateError('Client not found');
+
+    final existing = _clientFromDoc(snap);
+    final mergedCode = input.clientCode?.trim() ?? existing.clientCode;
+
     final data = <String, dynamic>{'updatedAt': FieldValue.serverTimestamp()};
     if (input.displayName != null) {
       data['displayName'] = input.displayName!.trim();
@@ -304,7 +337,12 @@ class FirestoreClientAccountRepository implements ClientAccountRepository {
     if (input.clientCode != null) {
       data['clientCode'] = input.clientCode!.trim();
     }
-    if (input.status != null) data['status'] = input.status!.name;
+    if (input.status != null) {
+      data['status'] = input.status!.name;
+      if (input.status == ClientStatus.active) {
+        data['archivedAt'] = FieldValue.delete();
+      }
+    }
     if (input.primaryEmail != null) {
       data['primaryEmail'] = input.primaryEmail!.trim();
     }
@@ -326,7 +364,27 @@ class FirestoreClientAccountRepository implements ClientAccountRepository {
     if (input.defaultAccountId != null) {
       data['defaultAccountId'] = input.defaultAccountId;
     }
-    await ref.set(data, SetOptions(merge: true));
+
+    final oldNorm = _normalizeClientCodeKey(existing.clientCode);
+    final newNorm = _normalizeClientCodeKey(mergedCode);
+
+    if (input.clientCode != null && oldNorm != newNorm) {
+      await _db.runTransaction((txn) async {
+        final newIdx = _clientCodeIndex.doc(newNorm);
+        final newSnap = await txn.get(newIdx);
+        if (newSnap.exists) {
+          final owner = (newSnap.data()?['clientId'] as num?)?.toInt();
+          if (owner != input.id) {
+            throw StateError('Client code already exists.');
+          }
+        }
+        txn.delete(_clientCodeIndex.doc(oldNorm));
+        txn.set(newIdx, {'clientId': input.id});
+        txn.set(ref, data, SetOptions(merge: true));
+      });
+    } else {
+      await ref.set(data, SetOptions(merge: true));
+    }
   }
 
   @override
@@ -359,9 +417,18 @@ class FirestoreClientAccountRepository implements ClientAccountRepository {
     final snap = await _allocations
         .where('clientId', isEqualTo: clientId)
         .get();
+    if (snap.docs.isEmpty) return {};
+
+    final payments = await _paymentsForClient(clientId);
+    final postedIds = {
+      for (final p in payments)
+        if (p.status == PaymentStatus.posted) p.id,
+    };
+
     final map = <int, int>{};
     for (final d in snap.docs) {
       final a = _allocFromDoc(d);
+      if (!postedIds.contains(a.paymentId)) continue;
       map[a.chargeId] = (map[a.chargeId] ?? 0) + a.amountMinor;
     }
     return map;
@@ -423,8 +490,10 @@ class FirestoreClientAccountRepository implements ClientAccountRepository {
     }
 
     final paymentsByClient = <int, List<ClientPayment>>{};
+    final postedPaymentIds = <int>{};
     for (final doc in results[1].docs) {
       final payment = _paymentFromDoc(doc);
+      if (payment.status == PaymentStatus.posted) postedPaymentIds.add(payment.id);
       if (!selectedIds.contains(payment.clientId)) continue;
       (paymentsByClient[payment.clientId] ??= []).add(payment);
     }
@@ -442,6 +511,7 @@ class FirestoreClientAccountRepository implements ClientAccountRepository {
       final clientId = (data['clientId'] as num).toInt();
       if (!selectedIds.contains(clientId)) continue;
       final allocation = _allocFromDoc(doc);
+      if (!postedPaymentIds.contains(allocation.paymentId)) continue;
       final allocByCharge = allocationsByClient[clientId] ??= {};
       allocByCharge[allocation.chargeId] =
           (allocByCharge[allocation.chargeId] ?? 0) + allocation.amountMinor;
@@ -643,6 +713,70 @@ class FirestoreClientAccountRepository implements ClientAccountRepository {
   }
 
   @override
+  Future<List<ChargeRegisterRow>> listChargeRegister({int? clientId}) async {
+    await _ensureMeta();
+    Query<Map<String, dynamic>> qc = _charges;
+    if (clientId != null) qc = qc.where('clientId', isEqualTo: clientId);
+    final chargeSnap = await qc.get();
+
+    final paymentsSnap = await _payments.get();
+    final postedIds = <int>{};
+    for (final d in paymentsSnap.docs) {
+      final p = _paymentFromDoc(d);
+      if (p.status == PaymentStatus.posted) postedIds.add(p.id);
+    }
+
+    final allocSnap = await _allocations.get();
+    final allocByCharge = <int, int>{};
+    for (final d in allocSnap.docs) {
+      final a = _allocFromDoc(d);
+      if (!postedIds.contains(a.paymentId)) continue;
+      allocByCharge[a.chargeId] =
+          (allocByCharge[a.chargeId] ?? 0) + a.amountMinor;
+    }
+
+    final clients = await listClients();
+    final clientById = {for (final c in clients) c.id: c};
+
+    final out = <ChargeRegisterRow>[];
+    for (final doc in chargeSnap.docs) {
+      final ch = _chargeFromDoc(doc);
+      final cl = clientById[ch.clientId];
+      if (cl == null) continue;
+      final open = _openAmountForCharge(ch, allocByCharge[ch.id] ?? 0);
+      out.add(
+        ChargeRegisterRow(
+          charge: ch,
+          clientDisplayName: cl.displayName,
+          clientCode: cl.clientCode,
+          openMinor: open,
+        ),
+      );
+    }
+    out.sort((a, b) {
+      final cmp = b.charge.issuedAt.compareTo(a.charge.issuedAt);
+      return cmp != 0 ? cmp : b.charge.id.compareTo(a.charge.id);
+    });
+    return out;
+  }
+
+  @override
+  Future<ChargeRegisterRow?> getChargeRegisterRow(int chargeId) async {
+    final c = await getCharge(chargeId);
+    if (c == null) return null;
+    final client = await getClient(c.clientId);
+    if (client == null) return null;
+    final allocBy = await _allocationsByChargeForClient(c.clientId);
+    final open = _openAmountForCharge(c, allocBy[c.id] ?? 0);
+    return ChargeRegisterRow(
+      charge: c,
+      clientDisplayName: client.displayName,
+      clientCode: client.clientCode,
+      openMinor: open,
+    );
+  }
+
+  @override
   Future<ClientCharge?> getCharge(int id) async {
     final d = await _charges.doc('$id').get();
     if (!d.exists) return null;
@@ -759,15 +893,38 @@ class FirestoreClientAccountRepository implements ClientAccountRepository {
   }
 
   @override
+  Future<List<PaymentAllocation>> listAllocationsForCharge(int chargeId) async {
+    await _ensureMeta();
+    final snap = await _allocations
+        .where('chargeId', isEqualTo: chargeId)
+        .get();
+    final list = snap.docs.map(_allocFromDoc).toList()
+      ..sort((a, b) => a.id.compareTo(b.id));
+    return list;
+  }
+
+  @override
   Future<int> recordPayment(RecordPaymentInput input) async {
     await _ensureMeta();
     if (input.amountMinor <= 0) throw ArgumentError('amount');
     final client = await getClient(input.clientId);
     if (client == null) throw StateError('Client not found');
 
+    final charges = await _chargesForClient(input.clientId);
+    final postedAllocByCharge = await _allocationsByChargeForClient(
+      input.clientId,
+    );
+    final mergedAllocations =
+        mergePaymentAllocationsByCharge(input.allocations);
     final allocTotals = summarizePaymentAllocations(
       paymentAmountMinor: input.amountMinor,
-      allocations: input.allocations,
+      allocations: mergedAllocations,
+    );
+    validateRecordPaymentAllocations(
+      paymentClientId: input.clientId,
+      mergedAllocations: mergedAllocations,
+      clientCharges: charges,
+      postedAllocationsByChargeId: postedAllocByCharge,
     );
     final unallocated = allocTotals.unallocatedMinor;
 
@@ -798,7 +955,7 @@ class FirestoreClientAccountRepository implements ClientAccountRepository {
         txn.set(_metaClient, {
           'nextPaymentId': paymentId + 1,
           'nextReceiptNumber': receiptNumber + 1,
-          'nextAllocationId': nextAllocId + input.allocations.length,
+          'nextAllocationId': nextAllocId + mergedAllocations.length,
         }, SetOptions(merge: true));
 
         txn.set(_payments.doc('$paymentId'), {
@@ -817,7 +974,7 @@ class FirestoreClientAccountRepository implements ClientAccountRepository {
           'createdAt': FieldValue.serverTimestamp(),
         });
 
-        for (final a in input.allocations) {
+        for (final a in mergedAllocations) {
           txn.set(_allocations.doc('$nextAllocId'), {
             'paymentId': paymentId,
             'chargeId': a.chargeId,
@@ -846,6 +1003,16 @@ class FirestoreClientAccountRepository implements ClientAccountRepository {
         client: client,
         payment: saved,
         allocations: allocsSaved,
+      );
+    }
+
+    if (ledgerTxId != null && saved != null) {
+      await _ledger.setTransactionTraceability(
+        transactionId: ledgerTxId,
+        clientId: saved.clientId,
+        sourceType: LedgerSourceType.clientPayment,
+        sourceId: saved.id,
+        sourceNumber: '${saved.receiptNumber ?? saved.id}',
       );
     }
 
@@ -881,6 +1048,12 @@ class FirestoreClientAccountRepository implements ClientAccountRepository {
           notes: 'Reversal: payment #$paymentId',
           paymentMethod: tx.paymentMethod,
           counterparty: tx.counterparty,
+          clientId: p.clientId,
+          sourceType: LedgerSourceType.paymentReversal,
+          sourceId: paymentId,
+          sourceNumber: p.receiptNumber != null
+              ? '${p.receiptNumber}'
+              : '$paymentId',
         );
       }
     }
@@ -1074,6 +1247,8 @@ class FirestoreClientAccountRepository implements ClientAccountRepository {
     final preview = await buildStatementPreview(input);
     final id = await _allocate('nextStatementId', 1);
     final statementNumber = await _allocate('nextStatementNumber', 1);
+    final bn = await _ledger.getSetting('business_name');
+    final linesJson = encodeStatementLinesToJson(preview.lines);
     await _statements.doc('$id').set({
       'clientId': input.clientId,
       'fromDate': Timestamp.fromDate(preview.fromDate),
@@ -1082,8 +1257,20 @@ class FirestoreClientAccountRepository implements ClientAccountRepository {
       'closingBalanceMinor': preview.closingBalanceMinor,
       'issuedAt': FieldValue.serverTimestamp(),
       'statementNumber': statementNumber,
+      'businessNameSnap': bn,
+      'clientDisplayNameSnap': preview.client.displayName,
+      'clientCodeSnap': preview.client.clientCode,
+      'linesJson': linesJson,
     });
     return id;
+  }
+
+  @override
+  Future<ClientStatement?> getStatement(int id) async {
+    await _ensureMeta();
+    final d = await _statements.doc('$id').get();
+    if (!d.exists || d.data() == null) return null;
+    return _stmtFromDoc(d);
   }
 
   @override

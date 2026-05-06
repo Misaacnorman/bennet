@@ -3,10 +3,7 @@ import '../domain/entities.dart';
 /// Pure helpers for tests and reporting.
 
 class MonthlyTotals {
-  const MonthlyTotals({
-    required this.incomeMinor,
-    required this.expenseMinor,
-  });
+  const MonthlyTotals({required this.incomeMinor, required this.expenseMinor});
 
   final int incomeMinor;
   final int expenseMinor;

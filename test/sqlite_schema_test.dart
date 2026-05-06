@@ -67,4 +67,49 @@ void main() {
       }
     },
   );
+
+  test(
+    'fresh v6 schema includes statement snapshots and ledger trace columns',
+    () async {
+      final db = await databaseFactory.openDatabase(
+        inMemoryDatabasePath,
+        options: OpenDatabaseOptions(
+          version: 6,
+          onCreate: (db, version) async {
+            await createBennetDatabaseSchemaV6(db);
+          },
+        ),
+      );
+      try {
+        final txCols = await db.rawQuery('PRAGMA table_info(transactions)');
+        final txnNames =
+            txCols.map((r) => r['name'] as String).toSet();
+        expect(
+          txnNames,
+          containsAll(<String>[
+            'client_id',
+            'source_type',
+            'source_id',
+            'source_number',
+          ]),
+        );
+
+        final stCols =
+            await db.rawQuery('PRAGMA table_info(client_statements)');
+        final stmtNames =
+            stCols.map((r) => r['name'] as String).toSet();
+        expect(
+          stmtNames,
+          containsAll(<String>[
+            'business_name_snap',
+            'client_display_name_snap',
+            'client_code_snap',
+            'lines_json',
+          ]),
+        );
+      } finally {
+        await db.close();
+      }
+    },
+  );
 }

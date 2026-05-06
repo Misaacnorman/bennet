@@ -6,7 +6,11 @@ int runningBalanceAfterLine({
   required int lineIndexInclusive,
 }) {
   var b = openingMinor;
-  for (var i = 0; i <= lineIndexInclusive && i < orderedDeltasMinor.length; i++) {
+  for (
+    var i = 0;
+    i <= lineIndexInclusive && i < orderedDeltasMinor.length;
+    i++
+  ) {
     b += orderedDeltasMinor[i];
   }
   return b;

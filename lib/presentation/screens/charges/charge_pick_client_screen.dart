@@ -18,7 +18,8 @@ class ChargePickClientScreen extends ConsumerStatefulWidget {
       _ChargePickClientScreenState();
 }
 
-class _ChargePickClientScreenState extends ConsumerState<ChargePickClientScreen> {
+class _ChargePickClientScreenState
+    extends ConsumerState<ChargePickClientScreen> {
   int? _clientId;
 
   @override
@@ -32,14 +33,13 @@ class _ChargePickClientScreenState extends ConsumerState<ChargePickClientScreen>
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('$e')),
         data: (clients) {
-          final selectable = clients
-              .where((c) => c.status != ClientStatus.archived)
-              .toList()
-            ..sort(
-              (a, b) => a.displayName.toLowerCase().compareTo(
+          final selectable =
+              clients.where((c) => c.status != ClientStatus.archived).toList()
+                ..sort(
+                  (a, b) => a.displayName.toLowerCase().compareTo(
                     b.displayName.toLowerCase(),
                   ),
-            );
+                );
 
           return ListView(
             padding: const EdgeInsets.all(16),
@@ -86,8 +86,7 @@ class _ChargePickClientScreenState extends ConsumerState<ChargePickClientScreen>
                 FilledButton.icon(
                   onPressed: _clientId == null
                       ? null
-                      : () =>
-                          context.go('/clients/$_clientId/charge/new'),
+                      : () => context.go('/clients/$_clientId/charge/new'),
                   icon: const Icon(Icons.request_quote_outlined),
                   label: const Text('Continue'),
                 ),

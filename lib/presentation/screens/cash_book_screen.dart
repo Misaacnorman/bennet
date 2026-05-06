@@ -8,6 +8,7 @@ import '../../core/period_math.dart';
 import '../../domain/entities.dart';
 import '../layout/responsive_content.dart';
 import '../widgets/app_scaffold.dart';
+import '../widgets/bennet_surface.dart';
 
 class CashBookScreen extends ConsumerStatefulWidget {
   const CashBookScreen({super.key});
@@ -129,7 +130,18 @@ class _CashBookScreenState extends ConsumerState<CashBookScreen> {
                                 )
                               : useTable
                               ? _cashTable(context, sorted, runs)
-                              : _cashList(context, sorted, runs),
+                              : Padding(
+                                  padding: const EdgeInsets.fromLTRB(
+                                    8,
+                                    8,
+                                    8,
+                                    8,
+                                  ),
+                                  child: BennetSurface(
+                                    padding: EdgeInsets.zero,
+                                    child: _cashList(context, sorted, runs),
+                                  ),
+                                ),
                         ),
                       ],
                     );
@@ -158,7 +170,7 @@ class _CashBookScreenState extends ConsumerState<CashBookScreen> {
           dense: true,
           title: Text(t.categoryName ?? ''),
           subtitle: Text(
-            '${DateFormat.yMMMd().format(t.occurredAt)} · ${t.type == TxType.income ? 'In' : 'Out'}',
+            '${DateFormat.yMMMd().format(t.occurredAt)} - ${t.type == TxType.income ? 'In' : 'Out'}',
           ),
           trailing: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -184,43 +196,47 @@ class _CashBookScreenState extends ConsumerState<CashBookScreen> {
     List<LedgerTransaction> sorted,
     List<int> runs,
   ) {
-    return Scrollbar(
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-        child: SingleChildScrollView(
-          child: DataTable(
-            columnSpacing: 24,
-            columns: const [
-              DataColumn(label: Text('Date')),
-              DataColumn(label: Text('Type')),
-              DataColumn(label: Text('Category')),
-              DataColumn(label: Text('Account')),
-              DataColumn(label: Text('Amount'), numeric: true),
-              DataColumn(label: Text('Balance'), numeric: true),
-            ],
-            rows: [
-              for (var i = 0; i < sorted.length; i++)
-                DataRow(
-                  cells: [
-                    DataCell(
-                      Text(DateFormat.yMMMd().format(sorted[i].occurredAt)),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+      child: BennetDataSurface(
+        child: Scrollbar(
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: SingleChildScrollView(
+              child: DataTable(
+                columnSpacing: 24,
+                columns: const [
+                  DataColumn(label: Text('Date')),
+                  DataColumn(label: Text('Type')),
+                  DataColumn(label: Text('Category')),
+                  DataColumn(label: Text('Account')),
+                  DataColumn(label: Text('Amount'), numeric: true),
+                  DataColumn(label: Text('Balance'), numeric: true),
+                ],
+                rows: [
+                  for (var i = 0; i < sorted.length; i++)
+                    DataRow(
+                      cells: [
+                        DataCell(
+                          Text(DateFormat.yMMMd().format(sorted[i].occurredAt)),
+                        ),
+                        DataCell(
+                          Text(sorted[i].type == TxType.income ? 'In' : 'Out'),
+                        ),
+                        DataCell(Text(sorted[i].categoryName ?? '')),
+                        DataCell(Text(sorted[i].accountName ?? '')),
+                        DataCell(
+                          Text(
+                            '${sorted[i].type == TxType.income ? '+' : '-'}${formatMoney(sorted[i].amountMinor)}',
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                        DataCell(Text(formatMoney(runs[i]))),
+                      ],
                     ),
-                    DataCell(
-                      Text(sorted[i].type == TxType.income ? 'In' : 'Out'),
-                    ),
-                    DataCell(Text(sorted[i].categoryName ?? '')),
-                    DataCell(Text(sorted[i].accountName ?? '')),
-                    DataCell(
-                      Text(
-                        '${sorted[i].type == TxType.income ? '+' : '-'}${formatMoney(sorted[i].amountMinor)}',
-                        style: const TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                    ),
-                    DataCell(Text(formatMoney(runs[i]))),
-                  ],
-                ),
-            ],
+                ],
+              ),
+            ),
           ),
         ),
       ),

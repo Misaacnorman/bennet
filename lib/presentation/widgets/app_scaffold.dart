@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../layout/responsive_content.dart';
+import '../theme/app_design_tokens.dart';
 
 class BennetNavDestination {
   const BennetNavDestination({
@@ -98,38 +99,197 @@ abstract final class BennetNav {
       current == path || (path != '/' && current.startsWith(path));
 }
 
+BoxDecoration _sidebarGradientDecoration(BuildContext context) {
+  final dark = Theme.of(context).brightness == Brightness.dark;
+  return BoxDecoration(
+    gradient: LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: dark
+          ? const [Color(0xFF05221C), AppPalette.brandEmeraldDeep]
+          : const [AppPalette.brandEmeraldDeep, AppPalette.brandEmerald],
+    ),
+    border: Border(
+      right: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+    ),
+  );
+}
+
+class _BennetBrandHeader extends StatelessWidget {
+  const _BennetBrandHeader({this.compact = false});
+
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final pad = compact
+        ? const EdgeInsets.fromLTRB(16, 20, 16, 12)
+        : const EdgeInsets.fromLTRB(14, 12, 8, 10);
+    return Padding(
+      padding: pad,
+      child: Row(
+        children: [
+          Container(
+            width: compact ? 36 : 32,
+            height: compact ? 36 : 32,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(AppRadii.control),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              'B',
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.96),
+                fontWeight: FontWeight.w800,
+                fontSize: compact ? 16 : 15,
+                height: 1,
+              ),
+            ),
+          ),
+          SizedBox(width: compact ? 12 : 10),
+          Expanded(
+            child: Text(
+              'Bennet',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                color: Colors.white.withValues(alpha: 0.98),
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.2,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BennetShellNavList extends StatelessWidget {
+  const _BennetShellNavList({
+    required this.currentPath,
+    required this.onNavigate,
+  });
+
+  final String currentPath;
+  final void Function(BennetNavDestination destination) onNavigate;
+
+  static final Color _inactiveFg = Colors.white.withValues(alpha: 0.78);
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(8, 4, 8, 12),
+      itemCount: BennetNav.destinations.length,
+      itemBuilder: (context, i) {
+        final d = BennetNav.destinations[i];
+        final selected = BennetNav._selected(currentPath, d.path);
+
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 1),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(AppRadii.control),
+              onTap: () => onNavigate(d),
+              splashColor: Colors.white.withValues(alpha: 0.08),
+              highlightColor: Colors.white.withValues(alpha: 0.06),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 140),
+                curve: Curves.easeOut,
+                height: 40,
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                decoration: BoxDecoration(
+                  color: selected
+                      ? Colors.white.withValues(alpha: 0.92)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(AppRadii.control),
+                ),
+                child: Row(
+                  children: [
+                    if (selected) ...[
+                      Container(
+                        width: 3,
+                        height: 22,
+                        margin: const EdgeInsets.only(right: 8),
+                        decoration: BoxDecoration(
+                          color: AppPalette.mint,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ],
+                    Icon(
+                      d.icon,
+                      size: 17,
+                      color: selected
+                          ? AppPalette.brandEmeraldDeep
+                          : _inactiveFg,
+                    ),
+                    const SizedBox(width: 9),
+                    Expanded(
+                      child: Text(
+                        d.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: selected
+                              ? AppPalette.brandEmeraldDeep
+                              : _inactiveFg,
+                          fontWeight: selected
+                              ? FontWeight.w700
+                              : FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    if (selected)
+                      Icon(
+                        Icons.chevron_left,
+                        size: 16,
+                        color: AppPalette.brandEmerald.withValues(alpha: 0.45),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
 class AppDrawer extends StatelessWidget {
   const AppDrawer({super.key});
 
   @override
   Widget build(BuildContext context) {
     final loc = GoRouterState.of(context).uri.path;
+
     return Drawer(
-      child: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.only(top: 8),
-          children: [
-            const DrawerHeader(
-              margin: EdgeInsets.zero,
-              child: Align(
-                alignment: Alignment.bottomLeft,
-                child: Text(
-                  'Bennet',
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
+      width: 286,
+      backgroundColor: Colors.transparent,
+      child: ClipRRect(
+        child: DecoratedBox(
+          decoration: _sidebarGradientDecoration(context),
+          child: SafeArea(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _BennetBrandHeader(compact: true),
+                Expanded(
+                  child: _BennetShellNavList(
+                    currentPath: loc,
+                    onNavigate: (d) {
+                      Navigator.of(context).pop();
+                      context.go(d.path);
+                    },
+                  ),
                 ),
-              ),
+              ],
             ),
-            for (final d in BennetNav.destinations)
-              ListTile(
-                leading: Icon(d.icon),
-                title: Text(d.label),
-                selected: BennetNav._selected(loc, d.path),
-                onTap: () {
-                  Navigator.of(context).pop();
-                  context.go(d.path);
-                },
-              ),
-          ],
+          ),
         ),
       ),
     );
@@ -147,114 +307,37 @@ class _ResponsiveSidebar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final brightness = Theme.of(context).brightness;
     final loc = GoRouterState.of(context).uri.path;
-    final scheme = Theme.of(context).colorScheme;
     final notchOverlap = _notchWidth / 2;
     final sidebarWidth = collapsed
         ? _notchWidth
         : _expandedWidth + notchOverlap;
+    final topInset = MediaQuery.paddingOf(context).top;
+    final notchTop = topInset + 10.0;
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 180),
       curve: Curves.easeOutCubic,
       width: sidebarWidth,
       child: Stack(
+        clipBehavior: Clip.none,
         children: [
           if (!collapsed)
             Positioned.fill(
               right: notchOverlap,
               child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: scheme.surfaceContainerLow,
-                  border: Border(
-                    right: BorderSide(color: scheme.outlineVariant),
-                  ),
-                ),
+                decoration: _sidebarGradientDecoration(context),
                 child: SafeArea(
                   right: false,
                   child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(14, 12, 8, 8),
-                        child: SizedBox(
-                          height: 34,
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  'Bennet',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context).textTheme.titleMedium
-                                      ?.copyWith(fontWeight: FontWeight.w800),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
+                      const _BennetBrandHeader(),
                       Expanded(
-                        child: ListView.builder(
-                          padding: const EdgeInsets.fromLTRB(7, 4, 7, 12),
-                          itemCount: BennetNav.destinations.length,
-                          itemBuilder: (context, i) {
-                            final d = BennetNav.destinations[i];
-                            final selected = BennetNav._selected(loc, d.path);
-
-                            return Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 1),
-                              child: InkWell(
-                                borderRadius: BorderRadius.circular(8),
-                                onTap: () => context.go(d.path),
-                                child: AnimatedContainer(
-                                  duration: const Duration(milliseconds: 140),
-                                  curve: Curves.easeOut,
-                                  height: 38,
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 10,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: selected
-                                        ? scheme.primaryContainer.withValues(
-                                            alpha: 0.75,
-                                          )
-                                        : Colors.transparent,
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Icon(
-                                        d.icon,
-                                        size: 17,
-                                        color: selected
-                                            ? scheme.onPrimaryContainer
-                                            : scheme.onSurfaceVariant,
-                                      ),
-                                      const SizedBox(width: 9),
-                                      Expanded(
-                                        child: Text(
-                                          d.label,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .bodyMedium
-                                              ?.copyWith(
-                                                color: selected
-                                                    ? scheme.onPrimaryContainer
-                                                    : scheme.onSurface,
-                                                fontWeight: selected
-                                                    ? FontWeight.w700
-                                                    : FontWeight.w600,
-                                              ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            );
-                          },
+                        child: _BennetShellNavList(
+                          currentPath: loc,
+                          onNavigate: (d) => context.go(d.path),
                         ),
                       ),
                     ],
@@ -264,29 +347,55 @@ class _ResponsiveSidebar extends StatelessWidget {
             ),
           Positioned(
             right: 0,
-            top: 54,
-            child: Material(
-              color: scheme.surface,
-              elevation: 2,
-              shape: StadiumBorder(
-                side: BorderSide(color: scheme.outlineVariant),
-              ),
-              child: InkWell(
-                customBorder: const StadiumBorder(),
-                onTap: onToggle,
-                child: SizedBox(
-                  width: _notchWidth,
-                  height: 44,
-                  child: Icon(
-                    collapsed ? Icons.chevron_right : Icons.chevron_left,
-                    size: 18,
-                    color: scheme.onSurfaceVariant,
-                  ),
-                ),
-              ),
+            top: notchTop,
+            child: _CollapseNotch(
+              onToggle: onToggle,
+              collapsed: collapsed,
+              brightness: brightness,
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _CollapseNotch extends StatelessWidget {
+  const _CollapseNotch({
+    required this.onToggle,
+    required this.collapsed,
+    required this.brightness,
+  });
+
+  final VoidCallback onToggle;
+  final bool collapsed;
+  final Brightness brightness;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onToggle,
+        customBorder: const StadiumBorder(),
+        child: Ink(
+          width: _ResponsiveSidebar._notchWidth + 2,
+          height: 44,
+          decoration: ShapeDecoration(
+            color: brightness == Brightness.dark
+                ? AppPalette.darkSurfaceRaised
+                : AppPalette.surface,
+            shape: StadiumBorder(
+              side: BorderSide(color: AppPalette.line.withValues(alpha: 0.85)),
+            ),
+            shadows: AppShadows.lifted(brightness),
+          ),
+          child: Icon(
+            collapsed ? Icons.chevron_right : Icons.chevron_left,
+            size: 18,
+            color: AppPalette.brandEmerald,
+          ),
+        ),
       ),
     );
   }
@@ -323,15 +432,49 @@ class _BennetScaffoldState extends State<BennetScaffold> {
       mode: widget.contentWidth,
       child: widget.body,
     );
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
 
     return LayoutBuilder(
       builder: (context, constraints) {
         final collapsed =
             _sidebarCollapsedOverride ??
             constraints.maxWidth < Breakpoints.expanded;
+        final useQuietAppBar = constraints.maxWidth >= Breakpoints.expanded;
+
+        final appBarDivider = Divider(
+          height: 1,
+          thickness: 1,
+          color: scheme.outlineVariant.withValues(alpha: 0.35),
+        );
 
         return Scaffold(
-          appBar: AppBar(title: Text(widget.title), actions: widget.actions),
+          appBar: AppBar(
+            title: Text(
+              widget.title,
+              style: useQuietAppBar
+                  ? theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: scheme.onSurface,
+                    )
+                  : theme.textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: scheme.onSurface,
+                    ),
+            ),
+            actions: widget.actions,
+            elevation: 0,
+            scrolledUnderElevation: 0,
+            backgroundColor: theme.scaffoldBackgroundColor,
+            surfaceTintColor: Colors.transparent,
+            foregroundColor: scheme.onSurface,
+            bottom: useQuietAppBar
+                ? PreferredSize(
+                    preferredSize: const Size.fromHeight(1),
+                    child: appBarDivider,
+                  )
+                : null,
+          ),
           body: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [

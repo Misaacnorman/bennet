@@ -28,6 +28,11 @@ class ClientAccountRepositoryImpl implements ClientAccountRepository {
     return rows.first['id'] as int;
   }
 
+  static bool _isSqliteUniqueViolation(DatabaseException e) {
+    final msg = e.toString().toUpperCase();
+    return msg.contains('UNIQUE CONSTRAINT') || msg.contains('UNIQUE');
+  }
+
   Client _clientFromRow(Map<String, Object?> r) {
     final openingAt = r['opening_balance_at'] as int?;
     return Client(
@@ -106,6 +111,10 @@ class ClientAccountRepositoryImpl implements ClientAccountRepository {
     closingBalanceMinor: r['closing_balance_minor'] as int,
     issuedAtMs: r['issued_at'] as int,
     statementNumber: r['statement_number'] as int,
+    businessNameSnap: r['business_name_snap'] as String?,
+    clientDisplayNameSnap: r['client_display_name_snap'] as String?,
+    clientCodeSnap: r['client_code_snap'] as String?,
+    linesJson: r['lines_json'] as String?,
   );
 
   @override
@@ -145,22 +154,29 @@ class ClientAccountRepositoryImpl implements ClientAccountRepository {
   Future<int> createClient(CreateClientInput input) async {
     final bid = await _bookId();
     final now = DateTime.now().millisecondsSinceEpoch;
-    return _db.insert('clients', {
-      'book_id': bid,
-      'client_code': input.clientCode.trim(),
-      'display_name': input.displayName.trim(),
-      'legal_name': input.legalName?.trim(),
-      'status': ClientStatus.active.name,
-      'primary_email': input.primaryEmail?.trim(),
-      'primary_phone': input.primaryPhone?.trim(),
-      'notes': input.notes?.trim(),
-      'opening_balance_minor': input.openingBalanceMinor,
-      'opening_balance_at': input.openingBalanceDate?.millisecondsSinceEpoch,
-      'default_category_id': input.defaultCategoryId,
-      'default_account_id': input.defaultAccountId,
-      'created_at': now,
-      'updated_at': now,
-    });
+    try {
+      return await _db.insert('clients', {
+        'book_id': bid,
+        'client_code': input.clientCode.trim(),
+        'display_name': input.displayName.trim(),
+        'legal_name': input.legalName?.trim(),
+        'status': ClientStatus.active.name,
+        'primary_email': input.primaryEmail?.trim(),
+        'primary_phone': input.primaryPhone?.trim(),
+        'notes': input.notes?.trim(),
+        'opening_balance_minor': input.openingBalanceMinor,
+        'opening_balance_at': input.openingBalanceDate?.millisecondsSinceEpoch,
+        'default_category_id': input.defaultCategoryId,
+        'default_account_id': input.defaultAccountId,
+        'created_at': now,
+        'updated_at': now,
+      });
+    } on DatabaseException catch (e) {
+      if (_isSqliteUniqueViolation(e)) {
+        throw StateError('Client code already exists.');
+      }
+      rethrow;
+    }
   }
 
   @override
@@ -177,7 +193,12 @@ class ClientAccountRepositoryImpl implements ClientAccountRepository {
     if (input.clientCode != null) {
       data['client_code'] = input.clientCode!.trim();
     }
-    if (input.status != null) data['status'] = input.status!.name;
+    if (input.status != null) {
+      data['status'] = input.status!.name;
+      if (input.status == ClientStatus.active) {
+        data['archived_at'] = null;
+      }
+    }
     if (input.primaryEmail != null) {
       data['primary_email'] = input.primaryEmail!.trim();
     }
@@ -198,7 +219,14 @@ class ClientAccountRepositoryImpl implements ClientAccountRepository {
     if (input.defaultAccountId != null) {
       data['default_account_id'] = input.defaultAccountId;
     }
-    await _db.update('clients', data, where: 'id = ?', whereArgs: [input.id]);
+    try {
+      await _db.update('clients', data, where: 'id = ?', whereArgs: [input.id]);
+    } on DatabaseException catch (e) {
+      if (input.clientCode != null && _isSqliteUniqueViolation(e)) {
+        throw StateError('Client code already exists.');
+      }
+      rethrow;
+    }
   }
 
   @override
@@ -244,15 +272,19 @@ class ClientAccountRepositoryImpl implements ClientAccountRepository {
   }
 
   Future<Map<int, int>> _allocationsByCharge(int clientId) async {
-    final rows = await _db.query(
-      'payment_allocations',
-      where: 'client_id = ?',
-      whereArgs: [clientId],
+    final rows = await _db.rawQuery(
+      '''
+SELECT pa.charge_id, SUM(pa.amount_minor) AS sum_amt
+FROM payment_allocations pa
+INNER JOIN client_payments cp ON cp.id = pa.payment_id
+WHERE pa.client_id = ? AND cp.status = ?
+GROUP BY pa.charge_id
+''',
+      [clientId, PaymentStatus.posted.name],
     );
     final map = <int, int>{};
     for (final r in rows) {
-      final a = _allocFromRow(r);
-      map[a.chargeId] = (map[a.chargeId] ?? 0) + a.amountMinor;
+      map[(r['charge_id'] as num).toInt()] = (r['sum_amt'] as num).toInt();
     }
     return map;
   }
@@ -313,10 +345,13 @@ class ClientAccountRepositoryImpl implements ClientAccountRepository {
     }
 
     final paymentsByClient = <int, List<ClientPayment>>{};
+    final postedPaymentIds = <int>{};
     for (final r in results[1]) {
+      final payment = _paymentFromRow(r);
+      if (payment.status == PaymentStatus.posted) postedPaymentIds.add(payment.id);
       final clientId = r['client_id'] as int;
       if (!selectedIds.contains(clientId)) continue;
-      (paymentsByClient[clientId] ??= []).add(_paymentFromRow(r));
+      (paymentsByClient[clientId] ??= []).add(payment);
     }
 
     final adjustmentsByClient = <int, List<ClientAdjustment>>{};
@@ -328,9 +363,10 @@ class ClientAccountRepositoryImpl implements ClientAccountRepository {
 
     final allocationsByClient = <int, Map<int, int>>{};
     for (final r in results[3]) {
+      final allocation = _allocFromRow(r);
+      if (!postedPaymentIds.contains(allocation.paymentId)) continue;
       final clientId = r['client_id'] as int;
       if (!selectedIds.contains(clientId)) continue;
-      final allocation = _allocFromRow(r);
       final allocByCharge = allocationsByClient[clientId] ??= {};
       allocByCharge[allocation.chargeId] =
           (allocByCharge[allocation.chargeId] ?? 0) + allocation.amountMinor;
@@ -535,6 +571,83 @@ class ClientAccountRepositoryImpl implements ClientAccountRepository {
   }
 
   @override
+  Future<List<ChargeRegisterRow>> listChargeRegister({int? clientId}) async {
+    final bid = await _bookId();
+    final allocRows = await _db.rawQuery(
+      '''
+SELECT pa.charge_id, SUM(pa.amount_minor) AS sum_amt
+FROM payment_allocations pa
+INNER JOIN client_payments cp ON cp.id = pa.payment_id
+WHERE cp.status = ?
+GROUP BY pa.charge_id
+''',
+      [PaymentStatus.posted.name],
+    );
+    final allocByCharge = <int, int>{
+      for (final r in allocRows)
+        (r['charge_id'] as num).toInt(): (r['sum_amt'] as num).toInt(),
+    };
+
+    final List<Map<String, Object?>> rows;
+    if (clientId != null) {
+      rows = await _db.rawQuery(
+        '''
+SELECT ch.id, ch.client_id, ch.amount_minor, ch.status, ch.issued_at,
+       ch.due_date, ch.description, ch.void_reason,
+       cl.display_name AS cdfn, cl.client_code AS cc
+FROM client_charges ch
+INNER JOIN clients cl ON cl.id = ch.client_id
+WHERE cl.book_id = ? AND ch.client_id = ?
+ORDER BY ch.issued_at DESC, ch.id DESC
+''',
+        [bid, clientId],
+      );
+    } else {
+      rows = await _db.rawQuery(
+        '''
+SELECT ch.id, ch.client_id, ch.amount_minor, ch.status, ch.issued_at,
+       ch.due_date, ch.description, ch.void_reason,
+       cl.display_name AS cdfn, cl.client_code AS cc
+FROM client_charges ch
+INNER JOIN clients cl ON cl.id = ch.client_id
+WHERE cl.book_id = ?
+ORDER BY ch.issued_at DESC, ch.id DESC
+''',
+        [bid],
+      );
+    }
+
+    return [
+      for (final r in rows)
+        () {
+          final ch = _chargeFromRow(r);
+          return ChargeRegisterRow(
+            charge: ch,
+            clientDisplayName: r['cdfn'] as String,
+            clientCode: r['cc'] as String,
+            openMinor: _openAmount(ch, allocByCharge[ch.id] ?? 0),
+          );
+        }(),
+    ];
+  }
+
+  @override
+  Future<ChargeRegisterRow?> getChargeRegisterRow(int chargeId) async {
+    final c = await getCharge(chargeId);
+    if (c == null) return null;
+    final client = await getClient(c.clientId);
+    if (client == null) return null;
+    final allocBy = await _allocationsByCharge(c.clientId);
+    final open = _openAmount(c, allocBy[c.id] ?? 0);
+    return ChargeRegisterRow(
+      charge: c,
+      clientDisplayName: client.displayName,
+      clientCode: client.clientCode,
+      openMinor: open,
+    );
+  }
+
+  @override
   Future<ClientCharge?> getCharge(int id) async {
     final rows = await _db.query(
       'client_charges',
@@ -665,6 +778,17 @@ class ClientAccountRepositoryImpl implements ClientAccountRepository {
     return rows.map(_allocFromRow).toList();
   }
 
+  @override
+  Future<List<PaymentAllocation>> listAllocationsForCharge(int chargeId) async {
+    final rows = await _db.query(
+      'payment_allocations',
+      where: 'charge_id = ?',
+      whereArgs: [chargeId],
+      orderBy: 'id ASC',
+    );
+    return rows.map(_allocFromRow).toList();
+  }
+
   Future<int> _nextReceiptNumber(Transaction txn) async {
     final rows = await txn.rawQuery(
       'SELECT MAX(receipt_number) as m FROM client_payments',
@@ -679,9 +803,19 @@ class ClientAccountRepositoryImpl implements ClientAccountRepository {
     final client = await getClient(input.clientId);
     if (client == null) throw StateError('Client not found');
 
+    final charges = await _chargesForClient(input.clientId);
+    final postedAllocByCharge = await _allocationsByCharge(input.clientId);
+    final mergedAllocations =
+        mergePaymentAllocationsByCharge(input.allocations);
     final allocTotals = summarizePaymentAllocations(
       paymentAmountMinor: input.amountMinor,
-      allocations: input.allocations,
+      allocations: mergedAllocations,
+    );
+    validateRecordPaymentAllocations(
+      paymentClientId: input.clientId,
+      mergedAllocations: mergedAllocations,
+      clientCharges: charges,
+      postedAllocationsByChargeId: postedAllocByCharge,
     );
     final unallocated = allocTotals.unallocatedMinor;
 
@@ -719,7 +853,7 @@ class ClientAccountRepositoryImpl implements ClientAccountRepository {
           'ledger_transaction_id': ledgerTxId,
           'created_at': DateTime.now().millisecondsSinceEpoch,
         });
-        for (final a in input.allocations) {
+        for (final a in mergedAllocations) {
           await txn.insert('payment_allocations', {
             'payment_id': paymentId,
             'charge_id': a.chargeId,
@@ -741,6 +875,15 @@ class ClientAccountRepositoryImpl implements ClientAccountRepository {
           client: client,
           payment: saved,
           allocations: allocsSaved,
+        );
+      }
+      if (ledgerTxId != null && saved != null) {
+        await _ledger.setTransactionTraceability(
+          transactionId: ledgerTxId,
+          clientId: saved.clientId,
+          sourceType: LedgerSourceType.clientPayment,
+          sourceId: saved.id,
+          sourceNumber: '${saved.receiptNumber ?? saved.id}',
         );
       }
       return pid;
@@ -784,6 +927,12 @@ class ClientAccountRepositoryImpl implements ClientAccountRepository {
           notes: 'Reversal: payment #$paymentId',
           paymentMethod: tx.paymentMethod,
           counterparty: tx.counterparty,
+          clientId: p.clientId,
+          sourceType: LedgerSourceType.paymentReversal,
+          sourceId: paymentId,
+          sourceNumber: p.receiptNumber != null
+              ? '${p.receiptNumber}'
+              : '$paymentId',
         );
       }
     }
@@ -984,6 +1133,8 @@ class ClientAccountRepositoryImpl implements ClientAccountRepository {
   @override
   Future<int> saveStatement(BuildStatementInput input) async {
     final preview = await buildStatementPreview(input);
+    final bn = await _ledger.getSetting('business_name');
+    final linesJson = encodeStatementLinesToJson(preview.lines);
     return _db.transaction<int>((txn) async {
       final sn = await _nextStatementNumber(txn);
       final now = DateTime.now().millisecondsSinceEpoch;
@@ -995,8 +1146,23 @@ class ClientAccountRepositoryImpl implements ClientAccountRepository {
         'closing_balance_minor': preview.closingBalanceMinor,
         'issued_at': now,
         'statement_number': sn,
+        'business_name_snap': bn,
+        'client_display_name_snap': preview.client.displayName,
+        'client_code_snap': preview.client.clientCode,
+        'lines_json': linesJson,
       });
     });
+  }
+
+  @override
+  Future<ClientStatement?> getStatement(int id) async {
+    final rows = await _db.query(
+      'client_statements',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+    if (rows.isEmpty) return null;
+    return _stmtFromRow(rows.first);
   }
 
   @override
@@ -1126,9 +1292,11 @@ SELECT
       _db.rawQuery(
         '''
 WITH alloc AS (
-  SELECT charge_id, SUM(amount_minor) AS allocated
-  FROM payment_allocations
-  GROUP BY charge_id
+  SELECT pa.charge_id, SUM(pa.amount_minor) AS allocated
+  FROM payment_allocations pa
+  INNER JOIN client_payments cp ON cp.id = pa.payment_id
+  WHERE cp.status = ?
+  GROUP BY pa.charge_id
 )
 SELECT
   COALESCE(SUM(
@@ -1153,7 +1321,12 @@ LEFT JOIN alloc ON alloc.charge_id = ch.id
 WHERE c.status = ?
   AND ch.status != ?
 ''',
-        [todayStart, ClientStatus.active.name, ChargeStatus.voided.name],
+        [
+          PaymentStatus.posted.name,
+          todayStart,
+          ClientStatus.active.name,
+          ChargeStatus.voided.name,
+        ],
       ),
       _db.rawQuery(
         '''

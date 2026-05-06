@@ -234,6 +234,148 @@ void main() {
       expect((await repo.clientSummary(cid)).balanceMinor, 6000);
     });
 
+    test(
+      'reversed payment restores charge open amount after allocation',
+      () async {
+        final cid = await repo.createClient(
+          const CreateClientInput(displayName: 'Kap', clientCode: 'KAP'),
+        );
+        final chg = await repo.createCharge(
+          CreateChargeInput(
+            clientId: cid,
+            amountMinor: 10_000,
+            issuedAt: DateTime.utc(2026, 8, 1),
+          ),
+        );
+        final pid = await repo.recordPayment(
+          RecordPaymentInput(
+            clientId: cid,
+            amountMinor: 10_000,
+            receivedAt: DateTime.utc(2026, 8, 2),
+            method: PaymentMethod.cash,
+            accountId: 1,
+            categoryId: 1,
+            allocations: [
+              PaymentAllocationInput(chargeId: chg, amountMinor: 10_000),
+            ],
+            syncLedgerIncome: false,
+          ),
+        );
+        expect(await repo.listChargesWithOpenAmount(cid), isEmpty);
+
+        await repo.reversePayment(pid, 'undo');
+        final open = await repo.listChargesWithOpenAmount(cid);
+        expect(open, hasLength(1));
+        expect(open.single.openMinor, 10_000);
+      },
+    );
+
+    test('recordPayment rejects allocation to voided charge', () async {
+      final cid = await repo.createClient(
+        const CreateClientInput(displayName: 'Lam', clientCode: 'LAM'),
+      );
+      final chg = await repo.createCharge(
+        CreateChargeInput(
+          clientId: cid,
+          amountMinor: 5000,
+          issuedAt: DateTime.utc(2026, 8, 1),
+        ),
+      );
+      await repo.voidCharge(chg, 'bad entry');
+      expect(
+        () => repo.recordPayment(
+          RecordPaymentInput(
+            clientId: cid,
+            amountMinor: 1000,
+            receivedAt: DateTime.utc(2026, 8, 2),
+            method: PaymentMethod.cash,
+            accountId: 1,
+            categoryId: 1,
+            allocations: [
+              PaymentAllocationInput(chargeId: chg, amountMinor: 1000),
+            ],
+            syncLedgerIncome: false,
+          ),
+        ),
+        throwsArgumentError,
+      );
+    });
+
+    test('listChargeRegister derives paid after full allocation', () async {
+      final cid = await repo.createClient(
+        const CreateClientInput(displayName: 'Nu', clientCode: 'NU'),
+      );
+      final chg = await repo.createCharge(
+        CreateChargeInput(
+          clientId: cid,
+          amountMinor: 3000,
+          issuedAt: DateTime.utc(2026, 9, 1),
+        ),
+      );
+      await repo.recordPayment(
+        RecordPaymentInput(
+          clientId: cid,
+          amountMinor: 3000,
+          receivedAt: DateTime.utc(2026, 9, 2),
+          method: PaymentMethod.cash,
+          accountId: 1,
+          categoryId: 1,
+          allocations: [
+            PaymentAllocationInput(chargeId: chg, amountMinor: 3000),
+          ],
+          syncLedgerIncome: false,
+        ),
+      );
+      final rows = await repo.listChargeRegister();
+      final mine = rows.where((r) => r.charge.id == chg).toList();
+      expect(mine, hasLength(1));
+      expect(mine.single.openMinor, 0);
+      expect(mine.single.ledgerStatus, ChargeLedgerStatus.paid);
+    });
+
+    test('recordPayment merges duplicate charge allocation lines', () async {
+      final cid = await repo.createClient(
+        const CreateClientInput(displayName: 'Mu', clientCode: 'MU'),
+      );
+      final chg = await repo.createCharge(
+        CreateChargeInput(
+          clientId: cid,
+          amountMinor: 10_000,
+          issuedAt: DateTime.utc(2026, 8, 1),
+        ),
+      );
+      final pid = await repo.recordPayment(
+        RecordPaymentInput(
+          clientId: cid,
+          amountMinor: 900,
+          receivedAt: DateTime.utc(2026, 8, 2),
+          method: PaymentMethod.cash,
+          accountId: 1,
+          categoryId: 1,
+          allocations: [
+            PaymentAllocationInput(chargeId: chg, amountMinor: 400),
+            PaymentAllocationInput(chargeId: chg, amountMinor: 500),
+          ],
+          syncLedgerIncome: false,
+        ),
+      );
+      final rows = await repo.listAllocationsForPayment(pid);
+      expect(rows, hasLength(1));
+      expect(rows.single.amountMinor, 900);
+    });
+
+    test('createClient rejects duplicate client code', () async {
+      await repo.createClient(
+        const CreateClientInput(displayName: 'A', clientCode: 'DUP'),
+      );
+      expect(
+        () => repo.createClient(
+          const CreateClientInput(displayName: 'B', clientCode: 'DUP'),
+        ),
+        throwsA(isA<StateError>()),
+      );
+    });
+
     test('overviewMetrics uses aggregate loading', () async {
       final cid = await repo.createClient(
         const CreateClientInput(displayName: 'Theta', clientCode: 'THA'),

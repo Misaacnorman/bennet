@@ -71,6 +71,10 @@ class LedgerTransaction {
     this.clearedAt,
     this.categoryName,
     this.accountName,
+    this.clientId,
+    this.sourceType,
+    this.sourceId,
+    this.sourceNumber,
   });
 
   final int id;
@@ -86,6 +90,21 @@ class LedgerTransaction {
   final DateTime? clearedAt;
   final String? categoryName;
   final String? accountName;
+
+  /// When set with [sourceType]/[sourceId], links cash-book activity to client payments.
+  final int? clientId;
+  final String? sourceType;
+  final int? sourceId;
+  final String? sourceNumber;
+
+  bool get linksToPostedPayment =>
+      sourceType == LedgerSourceType.clientPayment && sourceId != null;
+}
+
+/// Values for [LedgerTransaction.sourceType] on payment-related ledger writes.
+abstract final class LedgerSourceType {
+  static const clientPayment = 'client_payment';
+  static const paymentReversal = 'payment_reversal';
 }
 
 class PeriodOpening {

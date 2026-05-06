@@ -1,10 +1,8 @@
 // Domain-neutral client account entities (charges, payments, statements).
 
-enum ClientStatus {
-  active,
-  paused,
-  archived,
-}
+import 'dart:convert' show jsonDecode, jsonEncode;
+
+enum ClientStatus { active, paused, archived }
 
 extension ClientStatusWire on ClientStatus {
   String get wire => name;
@@ -13,11 +11,7 @@ extension ClientStatusWire on ClientStatus {
       ClientStatus.values.firstWhere((e) => e.name == s);
 }
 
-enum ChargeStatus {
-  open,
-  paid,
-  voided,
-}
+enum ChargeStatus { open, paid, voided }
 
 extension ChargeStatusWire on ChargeStatus {
   String get wire => name;
@@ -26,10 +20,43 @@ extension ChargeStatusWire on ChargeStatus {
       ChargeStatus.values.firstWhere((e) => e.name == s);
 }
 
-enum PaymentStatus {
-  posted,
-  reversed,
+/// Register / list presentation status from open amount and due date (stored
+/// [ChargeStatus.paid] is not authoritative).
+enum ChargeLedgerStatus { open, paid, overdue, voided }
+
+ChargeLedgerStatus deriveChargeLedgerStatus(ClientCharge charge, int openMinor) {
+  if (charge.status == ChargeStatus.voided) return ChargeLedgerStatus.voided;
+  if (openMinor <= 0) return ChargeLedgerStatus.paid;
+  final due = charge.dueDate;
+  if (due != null) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final dd = DateTime(due.year, due.month, due.day);
+    if (dd.isBefore(today)) return ChargeLedgerStatus.overdue;
+  }
+  return ChargeLedgerStatus.open;
 }
+
+class ChargeRegisterRow {
+  const ChargeRegisterRow({
+    required this.charge,
+    required this.clientDisplayName,
+    required this.clientCode,
+    required this.openMinor,
+  });
+
+  final ClientCharge charge;
+  final String clientDisplayName;
+  final String clientCode;
+  final int openMinor;
+
+  ChargeLedgerStatus get ledgerStatus =>
+      deriveChargeLedgerStatus(charge, openMinor);
+
+  int get originalAmountMinor => charge.amountMinor;
+}
+
+enum PaymentStatus { posted, reversed }
 
 extension PaymentStatusWire on PaymentStatus {
   String get wire => name;
@@ -38,13 +65,7 @@ extension PaymentStatusWire on PaymentStatus {
       PaymentStatus.values.firstWhere((e) => e.name == s);
 }
 
-enum PaymentMethod {
-  cash,
-  bankTransfer,
-  card,
-  check,
-  other,
-}
+enum PaymentMethod { cash, bankTransfer, card, check, other }
 
 extension PaymentMethodWire on PaymentMethod {
   String get wire => name;
@@ -53,10 +74,18 @@ extension PaymentMethodWire on PaymentMethod {
       PaymentMethod.values.firstWhere((e) => e.name == s);
 }
 
-enum AdjustmentKind {
-  increase,
-  decrease,
+/// Short label for UI (domain-neutral).
+extension PaymentMethodDisplay on PaymentMethod {
+  String get displayLabel => switch (this) {
+    PaymentMethod.cash => 'Cash',
+    PaymentMethod.bankTransfer => 'Bank transfer',
+    PaymentMethod.card => 'Card',
+    PaymentMethod.check => 'Check',
+    PaymentMethod.other => 'Other',
+  };
 }
+
+enum AdjustmentKind { increase, decrease }
 
 extension AdjustmentKindWire on AdjustmentKind {
   String get wire => name;
@@ -65,12 +94,7 @@ extension AdjustmentKindWire on AdjustmentKind {
       AdjustmentKind.values.firstWhere((e) => e.name == s);
 }
 
-enum ClientLedgerEntryKind {
-  opening,
-  charge,
-  payment,
-  adjustment,
-}
+enum ClientLedgerEntryKind { opening, charge, payment, adjustment }
 
 class Client {
   const Client({
@@ -266,6 +290,7 @@ class ReceiptDocument {
   final String? reference;
   final String? notes;
   final List<({int chargeId, int amountMinor})> allocations;
+
   /// True after reversal; snapshot reflects issued receipt that was later reversed.
   final bool paymentReversed;
 
@@ -283,6 +308,10 @@ class ClientStatement {
     required this.closingBalanceMinor,
     required this.issuedAtMs,
     required this.statementNumber,
+    this.businessNameSnap,
+    this.clientDisplayNameSnap,
+    this.clientCodeSnap,
+    this.linesJson,
   });
 
   final int id;
@@ -293,6 +322,12 @@ class ClientStatement {
   final int closingBalanceMinor;
   final int issuedAtMs;
   final int statementNumber;
+
+  /// Fixed content for PDF regeneration (null on statements saved before snapshots).
+  final String? businessNameSnap;
+  final String? clientDisplayNameSnap;
+  final String? clientCodeSnap;
+  final String? linesJson;
 
   DateTime get fromDate =>
       DateTime.fromMillisecondsSinceEpoch(fromDateMs, isUtc: true);
@@ -319,6 +354,7 @@ class ClientLedgerLine {
   final ClientLedgerEntryKind kind;
   final String title;
   final String? subtitle;
+
   /// Effect on running balance (charges increase AR; payments decrease).
   final int deltaMinor;
   final int balanceAfterMinor;
@@ -338,6 +374,7 @@ class ClientAccountSummary {
   });
 
   final Client client;
+
   /// Positive means client owes; negative means credit.
   final int balanceMinor;
   final int outstandingChargesMinor;
@@ -526,4 +563,73 @@ class CreateClientAdjustmentInput {
   final int amountMinor;
   final DateTime effectiveAt;
   final String? reason;
+}
+
+String encodeStatementLinesToJson(List<StatementPreviewLine> lines) {
+  return jsonEncode([
+    for (final l in lines)
+      {
+        'occurredAtMs': l.occurredAtMs,
+        'label': l.label,
+        'detail': l.detail,
+        'deltaMinor': l.deltaMinor,
+        'runningBalanceMinor': l.runningBalanceMinor,
+      },
+  ]);
+}
+
+List<StatementPreviewLine> decodeStatementLinesFromJson(String raw) {
+  final decoded = jsonDecode(raw);
+  if (decoded is! List<dynamic>) return const [];
+  final out = <StatementPreviewLine>[];
+  for (final item in decoded) {
+    if (item is! Map<String, dynamic>) continue;
+    out.add(
+      StatementPreviewLine(
+        occurredAtMs: (item['occurredAtMs'] as num).toInt(),
+        label: item['label'] as String,
+        detail: item['detail'] as String?,
+        deltaMinor: (item['deltaMinor'] as num).toInt(),
+        runningBalanceMinor: (item['runningBalanceMinor'] as num).toInt(),
+      ),
+    );
+  }
+  return out;
+}
+
+/// Builds a [StatementPreview] from stored snapshot strings; does not recompute balances.
+StatementPreview statementPreviewFromSnapshot(
+  ClientStatement saved,
+  Client liveClient,
+) {
+  final snapName = saved.clientDisplayNameSnap ?? liveClient.displayName;
+  final snapCode = saved.clientCodeSnap ?? liveClient.clientCode;
+  final displayClient = Client(
+    id: liveClient.id,
+    bookId: liveClient.bookId,
+    clientCode: snapCode,
+    displayName: snapName,
+    legalName: liveClient.legalName,
+    status: liveClient.status,
+    primaryEmail: liveClient.primaryEmail,
+    primaryPhone: liveClient.primaryPhone,
+    notes: liveClient.notes,
+    openingBalanceMinor: liveClient.openingBalanceMinor,
+    openingBalanceDate: liveClient.openingBalanceDate,
+    defaultCategoryId: liveClient.defaultCategoryId,
+    defaultAccountId: liveClient.defaultAccountId,
+    createdAtMs: liveClient.createdAtMs,
+    updatedAtMs: liveClient.updatedAtMs,
+    archivedAtMs: liveClient.archivedAtMs,
+  );
+  final lj = saved.linesJson;
+  final lines = lj != null && lj.isNotEmpty ? decodeStatementLinesFromJson(lj) : const <StatementPreviewLine>[];
+  return StatementPreview(
+    client: displayClient,
+    fromDateMs: saved.fromDateMs,
+    toDateMs: saved.toDateMs,
+    openingBalanceMinor: saved.openingBalanceMinor,
+    lines: lines,
+    closingBalanceMinor: saved.closingBalanceMinor,
+  );
 }

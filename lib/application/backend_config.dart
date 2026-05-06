@@ -2,5 +2,7 @@
 ///
 /// Enable with:
 /// `flutter run --dart-define=USE_SQLITE=true`
-const bool kUseSqliteBackend =
-    bool.fromEnvironment('USE_SQLITE', defaultValue: false);
+const bool kUseSqliteBackend = bool.fromEnvironment(
+  'USE_SQLITE',
+  defaultValue: false,
+);

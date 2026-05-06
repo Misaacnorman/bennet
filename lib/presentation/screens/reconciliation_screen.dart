@@ -7,7 +7,9 @@ import '../../application/providers.dart';
 import '../../core/money.dart';
 import '../../domain/entities.dart';
 import '../layout/responsive_content.dart';
+import '../theme/app_design_tokens.dart';
 import '../widgets/app_scaffold.dart';
+import '../widgets/bennet_surface.dart';
 
 class ReconciliationScreen extends ConsumerStatefulWidget {
   const ReconciliationScreen({super.key});
@@ -300,27 +302,25 @@ class _ReconciliationScreenState extends ConsumerState<ReconciliationScreen> {
                       }
 
                       Widget summaryCard() {
-                        return Card(
-                          margin: EdgeInsets.zero,
-                          child: Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Statement net: ${formatMoney(summary.statementNetMinor)}',
-                                ),
-                                Text(
-                                  'Matched book net: ${formatMoney(summary.matchedBookNetMinor)}',
-                                ),
-                                Text(
-                                  'Unmatched on statement: ${formatMoney(summary.unmatchedStatementMinor)}',
-                                ),
-                                Text(
-                                  'Uncleared in book: ${formatMoney(summary.unclearedBookMinor)}',
-                                ),
-                              ],
-                            ),
+                        return BennetSurface(
+                          accent: AppSemanticColors.neutral,
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Statement net: ${formatMoney(summary.statementNetMinor)}',
+                              ),
+                              Text(
+                                'Matched book net: ${formatMoney(summary.matchedBookNetMinor)}',
+                              ),
+                              Text(
+                                'Unmatched on statement: ${formatMoney(summary.unmatchedStatementMinor)}',
+                              ),
+                              Text(
+                                'Uncleared in book: ${formatMoney(summary.unclearedBookMinor)}',
+                              ),
+                            ],
                           ),
                         );
                       }
@@ -331,42 +331,47 @@ class _ReconciliationScreenState extends ConsumerState<ReconciliationScreen> {
                             child: Text('No statement lines.'),
                           );
                         }
-                        return ListView.separated(
-                          itemCount: lines.length,
-                          separatorBuilder: (_, _) => const Divider(height: 1),
-                          itemBuilder: (ctx, i) {
-                            final line = lines[i];
-                            final matched = line.matchedTransactionId;
-                            return ListTile(
-                              title: Text(line.description),
-                              subtitle: Text(
-                                DateFormat.yMMMd().format(line.postedAt),
-                              ),
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    formatMoney(line.amountMinor),
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w600,
+                        return BennetSurface(
+                          padding: EdgeInsets.zero,
+                          clip: true,
+                          child: ListView.separated(
+                            itemCount: lines.length,
+                            separatorBuilder: (_, _) =>
+                                const Divider(height: 1),
+                            itemBuilder: (ctx, i) {
+                              final line = lines[i];
+                              final matched = line.matchedTransactionId;
+                              return ListTile(
+                                title: Text(line.description),
+                                subtitle: Text(
+                                  DateFormat.yMMMd().format(line.postedAt),
+                                ),
+                                trailing: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      formatMoney(line.amountMinor),
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                      ),
                                     ),
-                                  ),
-                                  if (matched == null)
-                                    TextButton(
-                                      onPressed: () =>
-                                          _matchLine(bankId, line.id),
-                                      child: const Text('Match'),
-                                    )
-                                  else
-                                    TextButton(
-                                      onPressed: () =>
-                                          _unmatchLine(bankId, line.id),
-                                      child: const Text('Unmatch'),
-                                    ),
-                                ],
-                              ),
-                            );
-                          },
+                                    if (matched == null)
+                                      TextButton(
+                                        onPressed: () =>
+                                            _matchLine(bankId, line.id),
+                                        child: const Text('Match'),
+                                      )
+                                    else
+                                      TextButton(
+                                        onPressed: () =>
+                                            _unmatchLine(bankId, line.id),
+                                        child: const Text('Unmatch'),
+                                      ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
                         );
                       }
 

@@ -6,7 +6,9 @@ import 'package:intl/intl.dart';
 import '../../application/providers.dart';
 import '../../core/money.dart';
 import '../layout/responsive_content.dart';
+import '../theme/app_design_tokens.dart';
 import '../widgets/app_scaffold.dart';
+import '../widgets/bennet_surface.dart';
 
 class MonthlySummaryScreen extends ConsumerStatefulWidget {
   const MonthlySummaryScreen({super.key});
@@ -145,32 +147,35 @@ class _MonthlySummaryScreenState extends ConsumerState<MonthlySummaryScreen> {
                   alignment: Alignment.centerLeft,
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 440),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        TextField(
-                          controller: _openingCtrl,
-                          decoration: const InputDecoration(
-                            labelText: 'Opening balance (edit & save)',
-                            helperText:
-                                'Stored opening for this month; affects closing.',
-                          ),
-                          keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true,
-                            signed: true,
-                          ),
-                          inputFormatters: [
-                            FilteringTextInputFormatter.allow(
-                              RegExp(r'^-?\d*\.?\d{0,2}'),
+                    child: BennetSurface(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          TextField(
+                            controller: _openingCtrl,
+                            decoration: const InputDecoration(
+                              labelText: 'Opening balance (edit & save)',
+                              helperText:
+                                  'Stored opening for this month; affects closing.',
                             ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        OutlinedButton(
-                          onPressed: _saveOpening,
-                          child: const Text('Save opening balance'),
-                        ),
-                      ],
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                              signed: true,
+                            ),
+                            inputFormatters: [
+                              FilteringTextInputFormatter.allow(
+                                RegExp(r'^-?\d*\.?\d{0,2}'),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          OutlinedButton(
+                            onPressed: _saveOpening,
+                            child: const Text('Save opening balance'),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -179,22 +184,29 @@ class _MonthlySummaryScreenState extends ConsumerState<MonthlySummaryScreen> {
                   alignment: Alignment.centerLeft,
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 520),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _row('Opening balance', formatMoney(s.openingMinor)),
-                        _row('Total income', formatMoney(s.totalIncomeMinor)),
-                        _row(
-                          'Total expenses',
-                          formatMoney(s.totalExpenseMinor),
-                        ),
-                        _row('Profit / loss', formatMoney(s.netMinor)),
-                        _row(
-                          'Closing balance',
-                          formatMoney(s.closingMinor),
-                          emphasize: true,
-                        ),
-                      ],
+                    child: BennetSurface(
+                      accent: AppSemanticColors.neutral,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 14,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _row('Opening balance', formatMoney(s.openingMinor)),
+                          _row('Total income', formatMoney(s.totalIncomeMinor)),
+                          _row(
+                            'Total expenses',
+                            formatMoney(s.totalExpenseMinor),
+                          ),
+                          _row('Profit / loss', formatMoney(s.netMinor)),
+                          _row(
+                            'Closing balance',
+                            formatMoney(s.closingMinor),
+                            emphasize: true,
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),

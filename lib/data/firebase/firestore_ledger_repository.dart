@@ -203,6 +203,7 @@ class FirestoreLedgerRepository implements LedgerRepository {
     final m = d.data()!;
     final cleared = m['clearedAt'] as Timestamp?;
     final oid = int.parse(d.id);
+    final srcIdRaw = m['sourceId'];
     return LedgerTransaction(
       id: oid,
       bookId: _defaultBookId,
@@ -217,6 +218,10 @@ class FirestoreLedgerRepository implements LedgerRepository {
       clearedAt: cleared?.toDate(),
       categoryName: catNames[m['categoryId'] as int],
       accountName: accNames[m['accountId'] as int],
+      clientId: (m['clientId'] as num?)?.toInt(),
+      sourceType: m['sourceType'] as String?,
+      sourceId: srcIdRaw is num ? srcIdRaw.toInt() : null,
+      sourceNumber: m['sourceNumber'] as String?,
     );
   }
 
@@ -265,6 +270,10 @@ class FirestoreLedgerRepository implements LedgerRepository {
     String? notes,
     String? paymentMethod,
     String? counterparty,
+    int? clientId,
+    String? sourceType,
+    int? sourceId,
+    String? sourceNumber,
   }) async {
     final id = await _allocateId('nextTransactionId', 1);
     await _transactions.doc('$id').set({
@@ -278,8 +287,30 @@ class FirestoreLedgerRepository implements LedgerRepository {
       'paymentMethod': paymentMethod,
       'counterparty': counterparty,
       'clearedAt': null,
+      'clientId': ?clientId,
+      'sourceType': ?sourceType,
+      'sourceId': ?sourceId,
+      'sourceNumber': ?sourceNumber,
     });
     return id;
+  }
+
+  @override
+  Future<void> setTransactionTraceability({
+    required int transactionId,
+    int? clientId,
+    String? sourceType,
+    int? sourceId,
+    String? sourceNumber,
+  }) async {
+    final data = <String, dynamic>{
+      'clientId': ?clientId,
+      'sourceType': ?sourceType,
+      'sourceId': ?sourceId,
+      'sourceNumber': ?sourceNumber,
+    };
+    if (data.isEmpty) return;
+    await _transactions.doc('$transactionId').set(data, SetOptions(merge: true));
   }
 
   @override

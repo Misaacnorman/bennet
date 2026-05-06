@@ -4,8 +4,10 @@ import 'package:go_router/go_router.dart';
 
 import '../../../application/client_account_providers.dart';
 import '../../../domain/client_accounts.dart';
+import '../../theme/app_design_tokens.dart';
 import '../../widgets/amount_text.dart';
 import '../../widgets/app_scaffold.dart';
+import '../../widgets/bennet_surface.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/page_header.dart';
 import '../../widgets/responsive_data_surface.dart';
@@ -32,7 +34,6 @@ class _ClientListScreenState extends ConsumerState<ClientListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final asyncSummaries = ref.watch(clientSummariesProvider);
 
     return BennetScaffold(
@@ -65,7 +66,7 @@ class _ClientListScreenState extends ConsumerState<ClientListScreen> {
               PageHeader(
                 title: 'Clients',
                 subtitle:
-                    '${clients.length} shown${_includeArchived ? '' : ' · archived hidden'}',
+                    '${clients.length} shown${_includeArchived ? '' : ' - archived hidden'}',
                 actions: [
                   OutlinedButton.icon(
                     onPressed: () => context.go('/payments/new'),
@@ -140,7 +141,7 @@ class _ClientListScreenState extends ConsumerState<ClientListScreen> {
               else
                 ResponsiveDataSurface(
                   table: _table(context, clients, summaryByClientId),
-                  cards: _cards(context, clients, summaryByClientId, theme),
+                  cards: _cards(context, clients, summaryByClientId),
                 ),
             ],
           );
@@ -154,9 +155,7 @@ class _ClientListScreenState extends ConsumerState<ClientListScreen> {
     List<Client> clients,
     Map<int, ClientAccountSummary> summaryByClientId,
   ) {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+    return BennetDataSurface(
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: DataTable(
@@ -164,7 +163,9 @@ class _ClientListScreenState extends ConsumerState<ClientListScreen> {
             DataColumn(label: Text('Code')),
             DataColumn(label: Text('Name')),
             DataColumn(label: Text('Balance'), numeric: true),
+            DataColumn(label: Text('Outstanding'), numeric: true),
             DataColumn(label: Text('Status')),
+            DataColumn(label: Text('')),
           ],
           rows: [
             for (final c in clients)
@@ -176,7 +177,34 @@ class _ClientListScreenState extends ConsumerState<ClientListScreen> {
                   DataCell(
                     AmountText(summaryByClientId[c.id]?.balanceMinor ?? 0),
                   ),
-                  DataCell(_status(c.status, Theme.of(context))),
+                  DataCell(
+                    AmountText(
+                      summaryByClientId[c.id]?.outstandingChargesMinor ?? 0,
+                    ),
+                  ),
+                  DataCell(_status(c.status)),
+                  DataCell(
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          tooltip: 'Record payment',
+                          icon: const Icon(Icons.payments_outlined, size: 20),
+                          onPressed: () =>
+                              context.go('/clients/${c.id}/payment/new'),
+                        ),
+                        IconButton(
+                          tooltip: 'New charge',
+                          icon: const Icon(
+                            Icons.request_quote_outlined,
+                            size: 20,
+                          ),
+                          onPressed: () =>
+                              context.go('/clients/${c.id}/charge/new'),
+                        ),
+                      ],
+                    ),
+                  ),
                 ],
               ),
           ],
@@ -189,39 +217,38 @@ class _ClientListScreenState extends ConsumerState<ClientListScreen> {
     BuildContext context,
     List<Client> clients,
     Map<int, ClientAccountSummary> summaryByClientId,
-    ThemeData theme,
   ) {
     return Column(
       children: [
         for (final c in clients)
-          Card(
-            margin: const EdgeInsets.only(bottom: 8),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: ListTile(
-              title: Text(c.displayName),
-              subtitle: Text(c.clientCode),
-              trailing: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  _status(c.status, theme),
-                  AmountText(summaryByClientId[c.id]?.balanceMinor ?? 0),
-                ],
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: BennetSurface(
+              padding: EdgeInsets.zero,
+              child: ListTile(
+                title: Text(c.displayName),
+                subtitle: Text(c.clientCode),
+                trailing: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    _status(c.status),
+                    AmountText(summaryByClientId[c.id]?.balanceMinor ?? 0),
+                  ],
+                ),
+                onTap: () => context.go('/clients/${c.id}'),
               ),
-              onTap: () => context.go('/clients/${c.id}'),
             ),
           ),
       ],
     );
   }
 
-  Widget _status(ClientStatus s, ThemeData theme) {
+  Widget _status(ClientStatus s) {
     final (label, color) = switch (s) {
-      ClientStatus.active => ('Active', Colors.green.shade800),
-      ClientStatus.paused => ('Paused', Colors.amber.shade900),
-      ClientStatus.archived => ('Archived', theme.colorScheme.outline),
+      ClientStatus.active => ('Active', AppPalette.brandEmerald),
+      ClientStatus.paused => ('Paused', AppSemanticColors.attention),
+      ClientStatus.archived => ('Archived', AppSemanticColors.neutral),
     };
     return StatusPill(label: label, color: color);
   }

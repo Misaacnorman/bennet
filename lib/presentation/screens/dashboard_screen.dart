@@ -5,7 +5,9 @@ import 'package:go_router/go_router.dart';
 import '../../application/providers.dart';
 import '../../core/money.dart';
 import '../layout/responsive_content.dart';
+import '../theme/app_design_tokens.dart';
 import '../widgets/app_scaffold.dart';
+import '../widgets/metric_tile.dart';
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -46,28 +48,35 @@ class DashboardScreen extends ConsumerWidget {
             body: LayoutBuilder(
               builder: (context, constraints) {
                 final cards = <Widget>[
-                  _metricCard(
-                    context,
-                    'Opening balance',
-                    formatMoney(s.openingMinor),
+                  MetricTile(
+                    title: 'Opening balance',
+                    value: formatMoney(s.openingMinor),
+                    icon: Icons.account_balance_wallet_outlined,
+                    accent: AppSemanticColors.info,
                   ),
-                  _metricCard(
-                    context,
-                    'Total income',
-                    formatMoney(s.totalIncomeMinor),
-                    color: Colors.green.shade700,
+                  MetricTile(
+                    title: 'Total income',
+                    value: formatMoney(s.totalIncomeMinor),
+                    icon: Icons.south_west,
+                    accent: AppSemanticColors.credits,
                   ),
-                  _metricCard(
-                    context,
-                    'Total expenses',
-                    formatMoney(s.totalExpenseMinor),
-                    color: Colors.red.shade700,
+                  MetricTile(
+                    title: 'Total expenses',
+                    value: formatMoney(s.totalExpenseMinor),
+                    icon: Icons.north_east,
+                    accent: AppSemanticColors.overdue,
                   ),
-                  _metricCard(context, 'Net (P&L)', formatMoney(s.netMinor)),
-                  _metricCard(
-                    context,
-                    'Closing balance',
-                    formatMoney(s.closingMinor),
+                  MetricTile(
+                    title: 'Net (P&L)',
+                    value: formatMoney(s.netMinor),
+                    icon: Icons.balance_outlined,
+                    accent: AppSemanticColors.neutral,
+                  ),
+                  MetricTile(
+                    title: 'Closing balance',
+                    value: formatMoney(s.closingMinor),
+                    icon: Icons.account_balance_outlined,
+                    accent: AppSemanticColors.credits,
                   ),
                 ];
                 final twoCol = constraints.maxWidth >= Breakpoints.compact;
@@ -84,7 +93,7 @@ class DashboardScreen extends ConsumerWidget {
                     if (!twoCol)
                       ...cards.map(
                         (w) => Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.only(bottom: 12),
                           child: w,
                         ),
                       )
@@ -112,27 +121,6 @@ class DashboardScreen extends ConsumerWidget {
           ),
         );
       },
-    );
-  }
-
-  Widget _metricCard(
-    BuildContext context,
-    String label,
-    String value, {
-    Color? color,
-  }) {
-    return Card(
-      child: ListTile(
-        title: Text(label),
-        trailing: Text(
-          value,
-          style: TextStyle(
-            fontWeight: FontWeight.w600,
-            fontSize: 16,
-            color: color,
-          ),
-        ),
-      ),
     );
   }
 }

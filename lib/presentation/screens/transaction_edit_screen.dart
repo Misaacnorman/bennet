@@ -13,6 +13,7 @@ import '../../domain/entities.dart';
 import '../../services/receipt_pdf_service.dart';
 import '../layout/responsive_content.dart';
 import '../widgets/app_scaffold.dart';
+import '../widgets/bennet_surface.dart';
 
 class TransactionEditScreen extends ConsumerStatefulWidget {
   const TransactionEditScreen({super.key, this.transactionId});
@@ -170,19 +171,26 @@ class _TransactionEditScreenState extends ConsumerState<TransactionEditScreen> {
   Future<void> _delete() async {
     final ok = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete transaction?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
+      builder: (ctx) {
+        final scheme = Theme.of(ctx).colorScheme;
+        return AlertDialog(
+          title: const Text('Delete transaction?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: scheme.error,
+                foregroundColor: scheme.onError,
+              ),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
     );
     if (ok != true || !mounted) return;
     final repo = await ref.read(ledgerRepositoryProvider.future);
@@ -261,6 +269,9 @@ class _TransactionEditScreenState extends ConsumerState<TransactionEditScreen> {
                   ),
                 if (!_isNew)
                   IconButton(
+                    style: IconButton.styleFrom(
+                      foregroundColor: Theme.of(context).colorScheme.error,
+                    ),
                     icon: const Icon(Icons.delete_outline),
                     onPressed: _delete,
                     tooltip: 'Delete',
@@ -299,95 +310,108 @@ class _TransactionEditScreenState extends ConsumerState<TransactionEditScreen> {
                   return ListView(
                     padding: const EdgeInsets.all(16),
                     children: [
-                      SegmentedButton<TxType>(
-                        segments: const [
-                          ButtonSegment(
-                            value: TxType.income,
-                            label: Text('Income'),
-                          ),
-                          ButtonSegment(
-                            value: TxType.expense,
-                            label: Text('Expense'),
-                          ),
-                        ],
-                        selected: {_type},
-                        onSelectionChanged: (s) =>
-                            setState(() => _type = s.first),
-                      ),
-                      const SizedBox(height: 16),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: ConstrainedBox(
-                          constraints: BoxConstraints(
-                            maxWidth: wide ? 280 : double.infinity,
-                          ),
-                          child: TextField(
-                            controller: _amountCtrl,
-                            decoration: const InputDecoration(
-                              labelText: 'Amount',
-                            ),
-                            keyboardType: const TextInputType.numberWithOptions(
-                              decimal: true,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      if (wide)
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                      BennetSurface(
+                        clip: false,
+                        padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            Expanded(child: categoryField),
-                            const SizedBox(width: 16),
-                            Expanded(child: accountField),
-                          ],
-                        )
-                      else ...[
-                        categoryField,
-                        const SizedBox(height: 16),
-                        accountField,
-                      ],
-                      const SizedBox(height: 8),
-                      ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('Date'),
-                        subtitle: Text(DateFormat.yMMMd().format(_date)),
-                        trailing: const Icon(Icons.calendar_today),
-                        onTap: _pickDate,
-                      ),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 560),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              TextField(
-                                controller: _payCtrl,
-                                decoration: const InputDecoration(
-                                  labelText: 'Payee / payer (optional)',
+                            SegmentedButton<TxType>(
+                              segments: const [
+                                ButtonSegment(
+                                  value: TxType.income,
+                                  label: Text('Income'),
+                                ),
+                                ButtonSegment(
+                                  value: TxType.expense,
+                                  label: Text('Expense'),
+                                ),
+                              ],
+                              selected: {_type},
+                              onSelectionChanged: (s) =>
+                                  setState(() => _type = s.first),
+                            ),
+                            const SizedBox(height: 16),
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: ConstrainedBox(
+                                constraints: BoxConstraints(
+                                  maxWidth: wide ? 280 : double.infinity,
+                                ),
+                                child: TextField(
+                                  controller: _amountCtrl,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Amount',
+                                  ),
+                                  keyboardType:
+                                      const TextInputType.numberWithOptions(
+                                        decimal: true,
+                                      ),
                                 ),
                               ),
-                              const SizedBox(height: 8),
-                              TextField(
-                                controller: _methodCtrl,
-                                decoration: const InputDecoration(
-                                  labelText: 'Payment method (optional)',
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              TextField(
-                                controller: _notesCtrl,
-                                decoration: const InputDecoration(
-                                  labelText: 'Notes (optional)',
-                                ),
-                                maxLines: 3,
-                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            if (wide)
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(child: categoryField),
+                                  const SizedBox(width: 16),
+                                  Expanded(child: accountField),
+                                ],
+                              )
+                            else ...[
+                              categoryField,
+                              const SizedBox(height: 16),
+                              accountField,
                             ],
-                          ),
+                            const SizedBox(height: 8),
+                            ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              title: const Text('Date'),
+                              subtitle: Text(DateFormat.yMMMd().format(_date)),
+                              trailing: const Icon(Icons.calendar_today),
+                              onTap: _pickDate,
+                            ),
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: ConstrainedBox(
+                                constraints: const BoxConstraints(
+                                  maxWidth: 560,
+                                ),
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    TextField(
+                                      controller: _payCtrl,
+                                      decoration: const InputDecoration(
+                                        labelText: 'Payee / payer (optional)',
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    TextField(
+                                      controller: _methodCtrl,
+                                      decoration: const InputDecoration(
+                                        labelText: 'Payment method (optional)',
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    TextField(
+                                      controller: _notesCtrl,
+                                      decoration: const InputDecoration(
+                                        labelText: 'Notes (optional)',
+                                      ),
+                                      maxLines: 3,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 20),
                       Align(
                         alignment: Alignment.centerLeft,
                         child: ConstrainedBox(

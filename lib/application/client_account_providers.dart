@@ -90,9 +90,11 @@ final paymentsRegisterProvider = FutureProvider<List<ClientPayment>>((
   return repo.listPayments();
 });
 
-final chargesRegisterProvider = FutureProvider<List<ClientCharge>>((ref) async {
+final chargesRegisterProvider = FutureProvider<List<ChargeRegisterRow>>((
+  ref,
+) async {
   final repo = await ref.watch(clientAccountRepositoryProvider.future);
-  return repo.listCharges();
+  return repo.listChargeRegister();
 });
 
 final statementPreviewProvider =
@@ -125,19 +127,64 @@ final overviewMetricsProvider = FutureProvider<OverviewMetrics>((ref) async {
 final overviewProvider = overviewMetricsProvider;
 
 final paymentDetailProvider =
-    FutureProvider.family<({ClientPayment? payment, Client? client}), int>((
+    FutureProvider.family<
+      ({
+        ClientPayment? payment,
+        Client? client,
+        List<PaymentAllocation> allocations,
+      }),
+      int
+    >((ref, paymentId) async {
+      final repo = await ref.watch(clientAccountRepositoryProvider.future);
+      final payment = await repo.getPayment(paymentId);
+      final allocations = payment != null
+          ? await repo.listAllocationsForPayment(paymentId)
+          : <PaymentAllocation>[];
+      final client = payment != null
+          ? await repo.getClient(payment.clientId)
+          : null;
+      return (
+        payment: payment,
+        client: client,
+        allocations: allocations,
+      );
+    });
+
+/// Charge metadata for allocation rows on payment detail (N small lookups).
+final paymentAllocationChargeLookupProvider =
+    FutureProvider.family<List<({PaymentAllocation allocation, ClientCharge? charge})>, int>((
       ref,
       paymentId,
     ) async {
       final repo = await ref.watch(clientAccountRepositoryProvider.future);
-      final payment = await repo.getPayment(paymentId);
-      final client = payment != null
-          ? await repo.getClient(payment.clientId)
-          : null;
-      return (payment: payment, client: client);
+      final allocs = await repo.listAllocationsForPayment(paymentId);
+      final out = <({PaymentAllocation allocation, ClientCharge? charge})>[];
+      for (final a in allocs) {
+        final ch = await repo.getCharge(a.chargeId);
+        out.add((allocation: a, charge: ch));
+      }
+      return out;
     });
 
-/// After client-account writes, refresh dependent providers.
+final receiptDocumentProvider = FutureProvider.family<ReceiptDocument?, int>((
+  ref,
+  paymentId,
+) async {
+  final repo = await ref.watch(clientAccountRepositoryProvider.future);
+  try {
+    return await repo.receiptForPayment(paymentId);
+  } catch (_) {
+    return null;
+  }
+});
+
+final statementDetailProvider = FutureProvider.family<ClientStatement?, int>((
+  ref,
+  id,
+) async {
+  final repo = await ref.watch(clientAccountRepositoryProvider.future);
+  return repo.getStatement(id);
+});
 void invalidateClientAccounts(WidgetRef ref, {int? clientId}) {
   ref.invalidate(clientsProvider);
   ref.invalidate(clientSummariesProvider);
@@ -146,6 +193,10 @@ void invalidateClientAccounts(WidgetRef ref, {int? clientId}) {
   ref.invalidate(chargesRegisterProvider);
   ref.invalidate(paymentDetailProvider);
   ref.invalidate(statementPreviewProvider);
+  ref.invalidate(paymentAllocationChargeLookupProvider);
+  ref.invalidate(receiptDocumentProvider);
+  ref.invalidate(statementDetailProvider);
+  ref.invalidate(statementsHistoryProvider(null));
   if (clientId != null) {
     ref.invalidate(clientProvider(clientId));
     ref.invalidate(clientSummaryProvider(clientId));

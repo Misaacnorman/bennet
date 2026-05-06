@@ -9,10 +9,7 @@ abstract class LedgerRepository {
 
   Future<int?> cashAccountId(int bookId);
 
-  Future<int> addBankAccount({
-    required int bookId,
-    required String name,
-  });
+  Future<int> addBankAccount({required int bookId, required String name});
 
   Future<List<LedgerTransaction>> listTransactions({
     required int bookId,
@@ -33,6 +30,19 @@ abstract class LedgerRepository {
     String? notes,
     String? paymentMethod,
     String? counterparty,
+    int? clientId,
+    String? sourceType,
+    int? sourceId,
+    String? sourceNumber,
+  });
+
+  /// Sets optional traceability columns (client link and document source).
+  Future<void> setTransactionTraceability({
+    required int transactionId,
+    int? clientId,
+    String? sourceType,
+    int? sourceId,
+    String? sourceNumber,
   });
 
   Future<void> updateTransaction({

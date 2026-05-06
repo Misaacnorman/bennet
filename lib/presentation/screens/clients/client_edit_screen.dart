@@ -7,6 +7,7 @@ import '../../../core/money.dart';
 import '../../../domain/client_accounts.dart';
 import '../../layout/responsive_content.dart';
 import '../../widgets/app_scaffold.dart';
+import '../../widgets/bennet_surface.dart';
 
 class ClientEditScreen extends ConsumerStatefulWidget {
   const ClientEditScreen({super.key, this.clientId});
@@ -108,63 +109,62 @@ class _ClientEditScreenState extends ConsumerState<ClientEditScreen> {
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          TextFormField(
-            controller: _code,
-            decoration: const InputDecoration(
-              labelText: 'Client code',
-              border: OutlineInputBorder(),
+          BennetSurface(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                TextFormField(
+                  controller: _code,
+                  decoration: const InputDecoration(labelText: 'Client code'),
+                  validator: (v) =>
+                      v == null || v.trim().isEmpty ? 'Required' : null,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _name,
+                  decoration: const InputDecoration(labelText: 'Display name'),
+                  validator: (v) =>
+                      v == null || v.trim().isEmpty ? 'Required' : null,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _email,
+                  decoration: const InputDecoration(labelText: 'Email'),
+                  keyboardType: TextInputType.emailAddress,
+                  validator: (v) {
+                    final t = v?.trim() ?? '';
+                    if (t.isEmpty) return null;
+                    final ok =
+                        RegExp(r'^[^@]+@[^@]+\.[^@]+$').hasMatch(t);
+                    return ok ? null : 'Enter a valid email address';
+                  },
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _phone,
+                  decoration: const InputDecoration(labelText: 'Phone'),
+                  keyboardType: TextInputType.phone,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _opening,
+                  decoration: const InputDecoration(
+                    labelText: 'Opening balance',
+                    helperText: 'Currency amount',
+                  ),
+                  keyboardType: TextInputType.number,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _notes,
+                  decoration: const InputDecoration(labelText: 'Notes'),
+                  maxLines: 3,
+                ),
+              ],
             ),
-            validator: (v) =>
-                v == null || v.trim().isEmpty ? 'Required' : null,
           ),
-          const SizedBox(height: 12),
-          TextFormField(
-            controller: _name,
-            decoration: const InputDecoration(
-              labelText: 'Display name',
-              border: OutlineInputBorder(),
-            ),
-            validator: (v) =>
-                v == null || v.trim().isEmpty ? 'Required' : null,
-          ),
-          const SizedBox(height: 12),
-          TextFormField(
-            controller: _email,
-            decoration: const InputDecoration(
-              labelText: 'Email',
-              border: OutlineInputBorder(),
-            ),
-            keyboardType: TextInputType.emailAddress,
-          ),
-          const SizedBox(height: 12),
-          TextFormField(
-            controller: _phone,
-            decoration: const InputDecoration(
-              labelText: 'Phone',
-              border: OutlineInputBorder(),
-            ),
-            keyboardType: TextInputType.phone,
-          ),
-          const SizedBox(height: 12),
-          TextFormField(
-            controller: _opening,
-            decoration: const InputDecoration(
-              labelText: 'Opening balance',
-              border: OutlineInputBorder(),
-              helperText: 'Currency amount',
-            ),
-            keyboardType: TextInputType.number,
-          ),
-          const SizedBox(height: 12),
-          TextFormField(
-            controller: _notes,
-            decoration: const InputDecoration(
-              labelText: 'Notes',
-              border: OutlineInputBorder(),
-            ),
-            maxLines: 3,
-          ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
           FilledButton(
             onPressed: () async {
               if (!_formKey.currentState!.validate()) return;
@@ -183,8 +183,9 @@ class _ClientEditScreenState extends ConsumerState<ClientEditScreen> {
                       primaryPhone: _phone.text.trim().isEmpty
                           ? null
                           : _phone.text.trim(),
-                      notes:
-                          _notes.text.trim().isEmpty ? null : _notes.text.trim(),
+                      notes: _notes.text.trim().isEmpty
+                          ? null
+                          : _notes.text.trim(),
                       openingBalanceMinor: openingMinor,
                     ),
                   );
@@ -202,8 +203,9 @@ class _ClientEditScreenState extends ConsumerState<ClientEditScreen> {
                       primaryPhone: _phone.text.trim().isEmpty
                           ? null
                           : _phone.text.trim(),
-                      notes:
-                          _notes.text.trim().isEmpty ? null : _notes.text.trim(),
+                      notes: _notes.text.trim().isEmpty
+                          ? null
+                          : _notes.text.trim(),
                       openingBalanceMinor: openingMinor,
                     ),
                   );
@@ -213,8 +215,9 @@ class _ClientEditScreenState extends ConsumerState<ClientEditScreen> {
                 }
               } catch (e) {
                 if (!context.mounted) return;
+                final msg = e is StateError ? e.message : '$e';
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('$e')),
+                  SnackBar(content: Text(msg)),
                 );
               }
             },

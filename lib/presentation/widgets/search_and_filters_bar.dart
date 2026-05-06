@@ -19,6 +19,8 @@ class SearchAndFiltersBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+
     return LayoutBuilder(
       builder: (context, c) {
         final narrow = c.maxWidth < Breakpoints.compact;
@@ -26,9 +28,8 @@ class SearchAndFiltersBar extends StatelessWidget {
           controller: controller,
           decoration: InputDecoration(
             hintText: hintText,
-            prefixIcon: const Icon(Icons.search),
-            border: const OutlineInputBorder(),
             isDense: true,
+            prefixIcon: Icon(Icons.search, color: scheme.onSurfaceVariant),
           ),
           onChanged: onChanged,
         );

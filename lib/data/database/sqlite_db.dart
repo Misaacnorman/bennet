@@ -4,7 +4,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
 
 const _dbName = 'bennet.db';
-const dbVersion = 5;
+const dbVersion = 6;
 
 Future<String> bennetDatabasePath() async {
   final dir = await getApplicationDocumentsDirectory();
@@ -42,7 +42,11 @@ CREATE TABLE transactions (
   notes TEXT,
   payment_method TEXT,
   counterparty TEXT,
-  cleared_at INTEGER
+  cleared_at INTEGER,
+  client_id INTEGER,
+  source_type TEXT,
+  source_id INTEGER,
+  source_number TEXT
 )''');
   await db.execute('''
 CREATE TABLE period_openings (
@@ -164,7 +168,11 @@ CREATE TABLE client_statements (
   opening_balance_minor INTEGER NOT NULL,
   closing_balance_minor INTEGER NOT NULL,
   issued_at INTEGER NOT NULL,
-  statement_number INTEGER NOT NULL
+  statement_number INTEGER NOT NULL,
+  business_name_snap TEXT,
+  client_display_name_snap TEXT,
+  client_code_snap TEXT,
+  lines_json TEXT
 )''');
   await db.execute(
     'CREATE INDEX idx_clients_book_status ON clients(book_id, status)',
@@ -244,6 +252,27 @@ Future<void> installClientAccountPerformanceIndexesV5(Database db) async {
   );
 }
 
+/// Statement PDF snapshots + ledger traceability columns (migration v6).
+Future<void> migrateToV6(Database db) async {
+  Future<void> addCol(String table, String name, String sqliteType) async {
+    final cols = await db.rawQuery('PRAGMA table_info($table)');
+    final exists = cols.any((r) => r['name'] == name);
+    if (!exists) {
+      await db.execute('ALTER TABLE $table ADD COLUMN $name $sqliteType');
+    }
+  }
+
+  await addCol('transactions', 'client_id', 'INTEGER');
+  await addCol('transactions', 'source_type', 'TEXT');
+  await addCol('transactions', 'source_id', 'INTEGER');
+  await addCol('transactions', 'source_number', 'TEXT');
+
+  await addCol('client_statements', 'business_name_snap', 'TEXT');
+  await addCol('client_statements', 'client_display_name_snap', 'TEXT');
+  await addCol('client_statements', 'client_code_snap', 'TEXT');
+  await addCol('client_statements', 'lines_json', 'TEXT');
+}
+
 /// Full v3 schema for a new database (tests and older migrations).
 @visibleForTesting
 Future<void> createBennetDatabaseSchemaV3(Database db) async {
@@ -264,6 +293,12 @@ Future<void> createBennetDatabaseSchemaV4(Database db) async {
 Future<void> createBennetDatabaseSchemaV5(Database db) async {
   await createBennetDatabaseSchemaV4(db);
   await installClientAccountPerformanceIndexesV5(db);
+}
+
+/// Alias for current head schema (v6 adds columns on upgrade; fresh DB has them via CREATE).
+@visibleForTesting
+Future<void> createBennetDatabaseSchemaV6(Database db) async {
+  await createBennetDatabaseSchemaV5(db);
 }
 
 Future<Database> openBennetDatabase() async {
@@ -287,9 +322,12 @@ Future<Database> openBennetDatabase() async {
       if (oldVersion < 5) {
         await installClientAccountPerformanceIndexesV5(db);
       }
+      if (oldVersion < 6) {
+        await migrateToV6(db);
+      }
     },
     onCreate: (db, version) async {
-      await createBennetDatabaseSchemaV5(db);
+      await createBennetDatabaseSchemaV6(db);
     },
   );
 }

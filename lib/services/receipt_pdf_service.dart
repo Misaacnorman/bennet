@@ -23,8 +23,7 @@ Future<Uint8List> buildTransactionReceiptPdf({
   final doc = pw.Document();
   final dateStr = DateFormat.yMMMd().format(transaction.occurredAt);
   final amountStr = formatMoney(transaction.amountMinor);
-  final typeStr =
-      transaction.type == TxType.income ? 'Income' : 'Expense';
+  final typeStr = transaction.type == TxType.income ? 'Income' : 'Expense';
 
   doc.addPage(
     pw.Page(
@@ -38,10 +37,7 @@ Future<Uint8List> buildTransactionReceiptPdf({
               businessName?.trim().isNotEmpty == true
                   ? businessName!.trim()
                   : 'Receipt',
-              style: pw.TextStyle(
-                fontSize: 22,
-                fontWeight: pw.FontWeight.bold,
-              ),
+              style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold),
             ),
             pw.SizedBox(height: 24),
             pw.Text('Date: $dateStr'),
@@ -64,7 +60,10 @@ Future<Uint8List> buildTransactionReceiptPdf({
             ],
             if (transaction.notes?.trim().isNotEmpty == true) ...[
               pw.SizedBox(height: 16),
-              pw.Text('Notes:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+              pw.Text(
+                'Notes:',
+                style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+              ),
               pw.Text(transaction.notes!.trim(), softWrap: true),
             ],
             pw.Spacer(),
@@ -82,14 +81,14 @@ Future<Uint8List> buildTransactionReceiptPdf({
 
 Future<Uint8List> buildClientPaymentReceiptPdf({
   required ReceiptDocument receipt,
+  String? footerSecondary,
 }) async {
   final doc = pw.Document();
   final dateStr = DateFormat.yMMMd().format(receipt.issuedAt);
   final amountStr = formatMoney(receipt.amountMinor);
-  final biz =
-      receipt.businessName?.trim().isNotEmpty == true
-          ? receipt.businessName!.trim()
-          : 'Receipt';
+  final biz = receipt.businessName?.trim().isNotEmpty == true
+      ? receipt.businessName!.trim()
+      : 'Receipt';
 
   final allocSum = _allocTotalMinor(receipt);
   final unallocated = receipt.amountMinor - allocSum;
@@ -124,10 +123,7 @@ Future<Uint8List> buildClientPaymentReceiptPdf({
             ],
             pw.Text(
               biz,
-              style: pw.TextStyle(
-                fontSize: 22,
-                fontWeight: pw.FontWeight.bold,
-              ),
+              style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold),
             ),
             pw.SizedBox(height: 16),
             pw.Text(
@@ -135,27 +131,18 @@ Future<Uint8List> buildClientPaymentReceiptPdf({
               style: pw.TextStyle(fontSize: 12, color: PdfColors.grey700),
             ),
             pw.SizedBox(height: 24),
-            pw.Text(
-              'Client: ${receipt.clientDisplayName}',
-              softWrap: true,
-            ),
+            pw.Text('Client: ${receipt.clientDisplayName}', softWrap: true),
             pw.SizedBox(height: 8),
-            pw.Text(
-              'Code: ${receipt.clientCode}',
-              softWrap: true,
-            ),
+            pw.Text('Code: ${receipt.clientCode}', softWrap: true),
             pw.SizedBox(height: 8),
             pw.Text('Date: $dateStr'),
             pw.SizedBox(height: 8),
-            pw.Text('Payment method: ${receipt.method.name}'),
+            pw.Text('Payment method: ${receipt.method.displayLabel}'),
             pw.SizedBox(height: 8),
             pw.Text('Amount received: $amountStr'),
             if (receipt.reference?.trim().isNotEmpty == true) ...[
               pw.SizedBox(height: 8),
-              pw.Text(
-                'Reference: ${receipt.reference}',
-                softWrap: true,
-              ),
+              pw.Text('Reference: ${receipt.reference}', softWrap: true),
             ],
             if (receipt.allocations.isNotEmpty) ...[
               pw.SizedBox(height: 16),
@@ -172,11 +159,10 @@ Future<Uint8List> buildClientPaymentReceiptPdf({
                 },
                 children: [
                   pw.TableRow(
-                    decoration: const pw.BoxDecoration(color: PdfColors.grey300),
-                    children: [
-                      _hdr('Charge'),
-                      _hdr('Applied'),
-                    ],
+                    decoration: const pw.BoxDecoration(
+                      color: PdfColors.grey300,
+                    ),
+                    children: [_hdr('Charge'), _hdr('Applied')],
                   ),
                   for (final a in receipt.allocations)
                     pw.TableRow(
@@ -197,10 +183,21 @@ Future<Uint8List> buildClientPaymentReceiptPdf({
             ],
             if (receipt.notes?.trim().isNotEmpty == true) ...[
               pw.SizedBox(height: 16),
-              pw.Text('Notes:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+              pw.Text(
+                'Notes:',
+                style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+              ),
               pw.Text(receipt.notes!.trim(), softWrap: true),
             ],
             pw.Spacer(),
+            if (footerSecondary?.trim().isNotEmpty == true) ...[
+              pw.Text(
+                footerSecondary!.trim(),
+                softWrap: true,
+                style: pw.TextStyle(fontSize: 10, color: PdfColors.grey700),
+              ),
+              pw.SizedBox(height: 8),
+            ],
             pw.Text(
               'Generated by Bennet',
               style: pw.TextStyle(fontSize: 10, color: PdfColors.grey700),
@@ -214,11 +211,11 @@ Future<Uint8List> buildClientPaymentReceiptPdf({
 }
 
 pw.Widget _hdr(String s) => pw.Padding(
-      padding: const pw.EdgeInsets.all(6),
-      child: pw.Text(s, style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-    );
+  padding: const pw.EdgeInsets.all(6),
+  child: pw.Text(s, style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+);
 
 pw.Widget _cell(String s) => pw.Padding(
-      padding: const pw.EdgeInsets.all(6),
-      child: pw.Text(s, softWrap: true),
-    );
+  padding: const pw.EdgeInsets.all(6),
+  child: pw.Text(s, softWrap: true),
+);

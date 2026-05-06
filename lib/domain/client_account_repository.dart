@@ -26,6 +26,11 @@ abstract class ClientAccountRepository {
 
   Future<List<ClientCharge>> listCharges({int? clientId, ChargeStatus? status});
 
+  /// Charges with derived open balances and client display fields (posted allocations only).
+  Future<List<ChargeRegisterRow>> listChargeRegister({int? clientId});
+
+  Future<ChargeRegisterRow?> getChargeRegisterRow(int chargeId);
+
   Future<ClientCharge?> getCharge(int id);
 
   Future<int> createCharge(CreateChargeInput input);
@@ -49,6 +54,8 @@ abstract class ClientAccountRepository {
 
   Future<List<PaymentAllocation>> listAllocationsForPayment(int paymentId);
 
+  Future<List<PaymentAllocation>> listAllocationsForCharge(int chargeId);
+
   Future<int> recordPayment(RecordPaymentInput input);
 
   Future<void> reversePayment(int paymentId, String reason);
@@ -60,6 +67,8 @@ abstract class ClientAccountRepository {
   Future<int> saveStatement(BuildStatementInput input);
 
   Future<List<ClientStatement>> listStatements({int? clientId});
+
+  Future<ClientStatement?> getStatement(int id);
 
   /// Book-wide metrics for overview dashboard.
   Future<OverviewMetrics> overviewMetrics();

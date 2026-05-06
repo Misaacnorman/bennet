@@ -7,6 +7,7 @@ import '../../core/money.dart';
 import '../../domain/entities.dart';
 import '../layout/responsive_content.dart';
 import '../widgets/app_scaffold.dart';
+import '../widgets/bennet_surface.dart';
 
 class BalanceSheetScreen extends ConsumerWidget {
   const BalanceSheetScreen({super.key});
@@ -155,7 +156,8 @@ class BalanceSheetScreen extends ConsumerWidget {
                       'Cash-centric view',
                       style: Theme.of(context).textTheme.titleMedium,
                     );
-                    final bookCard = Card(
+                    final bookCard = BennetSurface(
+                      padding: EdgeInsets.zero,
                       child: ListTile(
                         title: const Text(
                           'Book balance (month closing, all accounts)',
@@ -292,18 +294,33 @@ class BalanceSheetScreen extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(title, style: Theme.of(context).textTheme.titleSmall),
-        ...rows.map(
-          (r) => ListTile(
-            title: Text(r.label),
-            trailing: Text(formatMoney(r.amountMinor)),
-            onLongPress: () async {
-              final repo = await ref.read(ledgerRepositoryProvider.future);
-              await repo.deleteBalanceSheetItem(r.id);
-              ref.invalidate(balanceSheetItemsProvider(bookId));
-            },
-          ),
+        BennetSurface(
+          padding: EdgeInsets.zero,
+          child: rows.isEmpty
+              ? const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  child: Text('—'),
+                )
+              : Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    for (var i = 0; i < rows.length; i++) ...[
+                      if (i > 0) const Divider(height: 1),
+                      ListTile(
+                        title: Text(rows[i].label),
+                        trailing: Text(formatMoney(rows[i].amountMinor)),
+                        onLongPress: () async {
+                          final repo = await ref.read(
+                            ledgerRepositoryProvider.future,
+                          );
+                          await repo.deleteBalanceSheetItem(rows[i].id);
+                          ref.invalidate(balanceSheetItemsProvider(bookId));
+                        },
+                      ),
+                    ],
+                  ],
+                ),
         ),
-        if (rows.isEmpty) const Text('—'),
         const SizedBox(height: 12),
       ],
     );

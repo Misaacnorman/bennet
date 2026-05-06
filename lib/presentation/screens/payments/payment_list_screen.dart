@@ -6,8 +6,10 @@ import 'package:intl/intl.dart';
 import '../../../application/client_account_providers.dart';
 import '../../../domain/client_accounts.dart';
 import '../../layout/responsive_content.dart';
+import '../../theme/app_design_tokens.dart';
 import '../../widgets/amount_text.dart';
 import '../../widgets/app_scaffold.dart';
+import '../../widgets/bennet_surface.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/page_header.dart';
 import '../../widgets/responsive_data_surface.dart';
@@ -18,8 +20,7 @@ class PaymentListScreen extends ConsumerStatefulWidget {
   const PaymentListScreen({super.key});
 
   @override
-  ConsumerState<PaymentListScreen> createState() =>
-      _PaymentListScreenState();
+  ConsumerState<PaymentListScreen> createState() => _PaymentListScreenState();
 }
 
 class _PaymentListScreenState extends ConsumerState<PaymentListScreen> {
@@ -35,7 +36,6 @@ class _PaymentListScreenState extends ConsumerState<PaymentListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final async = ref.watch(paymentsRegisterProvider);
     final clientsAsync = ref.watch(clientsProvider);
 
@@ -64,7 +64,7 @@ class _PaymentListScreenState extends ConsumerState<PaymentListScreen> {
                 PageHeader(
                   title: 'Payments',
                   subtitle:
-                      '${filtered.length} shown · ${payments.length} total',
+                      '${filtered.length} shown - ${payments.length} total',
                 ),
                 const SizedBox(height: 12),
                 SearchAndFiltersBar(
@@ -75,15 +75,13 @@ class _PaymentListScreenState extends ConsumerState<PaymentListScreen> {
                     FilterChip(
                       label: const Text('All'),
                       selected: _statusFilter == null,
-                      onSelected: (_) =>
-                          setState(() => _statusFilter = null),
+                      onSelected: (_) => setState(() => _statusFilter = null),
                     ),
                     FilterChip(
                       label: const Text('Posted'),
                       selected: _statusFilter == PaymentStatus.posted,
-                      onSelected: (_) => setState(
-                        () => _statusFilter = PaymentStatus.posted,
-                      ),
+                      onSelected: (_) =>
+                          setState(() => _statusFilter = PaymentStatus.posted),
                     ),
                     FilterChip(
                       label: const Text('Reversed'),
@@ -125,13 +123,7 @@ class _PaymentListScreenState extends ConsumerState<PaymentListScreen> {
                 else
                   ResponsiveDataSurface(
                     table: _paymentTable(context, filtered, clientName, df),
-                    cards: _paymentCards(
-                      context,
-                      filtered,
-                      clientName,
-                      df,
-                      theme,
-                    ),
+                    cards: _paymentCards(context, filtered, clientName, df),
                   ),
               ],
             );
@@ -170,9 +162,7 @@ class _PaymentListScreenState extends ConsumerState<PaymentListScreen> {
     Map<int, String> clientName,
     DateFormat df,
   ) {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+    return BennetDataSurface(
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: DataTable(
@@ -201,9 +191,10 @@ class _PaymentListScreenState extends ConsumerState<PaymentListScreen> {
                   DataCell(
                     StatusPill(
                       label: p.status.name,
-                      color: p.status == PaymentStatus.posted
-                          ? Colors.green.shade800
-                          : Theme.of(context).colorScheme.outline,
+                      color: switch (p.status) {
+                        PaymentStatus.posted => AppSemanticColors.credits,
+                        PaymentStatus.reversed => AppSemanticColors.overdue,
+                      },
                     ),
                   ),
                   DataCell(AmountText(p.amountMinor)),
@@ -220,36 +211,36 @@ class _PaymentListScreenState extends ConsumerState<PaymentListScreen> {
     List<ClientPayment> rows,
     Map<int, String> clientName,
     DateFormat df,
-    ThemeData theme,
   ) {
     return Column(
       children: [
         for (final p in rows)
-          Card(
-            margin: const EdgeInsets.only(bottom: 8),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: ListTile(
-              title: Text(clientName[p.clientId] ?? 'Client #${p.clientId}'),
-              subtitle: Text(
-                '${df.format(p.receivedAt)} · ${p.method.name} · '
-                '#${p.receiptNumber ?? p.id}',
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: BennetSurface(
+              padding: EdgeInsets.zero,
+              child: ListTile(
+                title: Text(clientName[p.clientId] ?? 'Client #${p.clientId}'),
+                subtitle: Text(
+                  '${df.format(p.receivedAt)} - ${p.method.name} - '
+                  '#${p.receiptNumber ?? p.id}',
+                ),
+                trailing: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    AmountText(p.amountMinor),
+                    StatusPill(
+                      label: p.status.name,
+                      color: switch (p.status) {
+                        PaymentStatus.posted => AppSemanticColors.credits,
+                        PaymentStatus.reversed => AppSemanticColors.overdue,
+                      },
+                    ),
+                  ],
+                ),
+                onTap: () => context.go('/payments/${p.id}'),
               ),
-              trailing: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  AmountText(p.amountMinor),
-                  StatusPill(
-                    label: p.status.name,
-                    color: p.status == PaymentStatus.posted
-                        ? Colors.green.shade800
-                        : theme.colorScheme.outline,
-                  ),
-                ],
-              ),
-              onTap: () => context.go('/payments/${p.id}'),
             ),
           ),
       ],

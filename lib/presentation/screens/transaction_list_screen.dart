@@ -8,6 +8,7 @@ import '../../core/money.dart';
 import '../../domain/entities.dart';
 import '../layout/responsive_content.dart';
 import '../widgets/app_scaffold.dart';
+import '../widgets/bennet_surface.dart';
 
 class TransactionListScreen extends ConsumerStatefulWidget {
   const TransactionListScreen({super.key});
@@ -70,8 +71,27 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
             color: t.type == TxType.income ? Colors.green : Colors.red,
           ),
           title: Text(t.categoryName ?? 'Category'),
-          subtitle: Text(
-            '${DateFormat.MMMd().format(t.occurredAt)} · ${t.accountName ?? ''}',
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '${DateFormat.MMMd().format(t.occurredAt)} - ${t.accountName ?? ''}',
+              ),
+              if (t.linksToPostedPayment && t.sourceId != null)
+                TextButton(
+                  style: TextButton.styleFrom(
+                    padding: EdgeInsets.zero,
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  onPressed: () =>
+                      context.go('/payments/${t.sourceId}'),
+                  child: Text(
+                    'Payment ${t.sourceNumber ?? '#${t.sourceId}'}',
+                  ),
+                ),
+            ],
           ),
           trailing: Text(
             (t.type == TxType.income ? '+' : '-') + formatMoney(t.amountMinor),
@@ -85,44 +105,70 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
 
   Widget _dataTable(BuildContext context, List<LedgerTransaction> txs) {
     final ordered = txs.reversed.toList();
-    return Scrollbar(
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: SingleChildScrollView(
-          child: DataTable(
-            columnSpacing: 20,
-            columns: const [
-              DataColumn(label: Text('Date')),
-              DataColumn(label: Text('Type')),
-              DataColumn(label: Text('Category')),
-              DataColumn(label: Text('Account')),
-              DataColumn(label: Text('Amount'), numeric: true),
-            ],
-            rows: [
-              for (final t in ordered)
-                DataRow(
-                  onSelectChanged: (_) => context.go('/transactions/${t.id}'),
-                  cells: [
-                    DataCell(Text(DateFormat.yMMMd().format(t.occurredAt))),
-                    DataCell(
-                      Text(t.type == TxType.income ? 'Income' : 'Expense'),
-                    ),
-                    DataCell(Text(t.categoryName ?? '')),
-                    DataCell(Text(t.accountName ?? '')),
-                    DataCell(
-                      Text(
-                        '${t.type == TxType.income ? '+' : '-'}${formatMoney(t.amountMinor)}',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          color: t.type == TxType.income
-                              ? Colors.green.shade700
-                              : Colors.red.shade700,
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+      child: BennetDataSurface(
+        child: Scrollbar(
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: SingleChildScrollView(
+              child: DataTable(
+                columnSpacing: 20,
+                columns: const [
+                  DataColumn(label: Text('Date')),
+                  DataColumn(label: Text('Type')),
+                  DataColumn(label: Text('Category')),
+                  DataColumn(label: Text('Account')),
+                  DataColumn(label: Text('Source')),
+                  DataColumn(label: Text('Amount'), numeric: true),
+                ],
+                rows: [
+                  for (final t in ordered)
+                    DataRow(
+                      onSelectChanged: (_) =>
+                          context.go('/transactions/${t.id}'),
+                      cells: [
+                        DataCell(Text(DateFormat.yMMMd().format(t.occurredAt))),
+                        DataCell(
+                          Text(t.type == TxType.income ? 'Income' : 'Expense'),
                         ),
-                      ),
+                        DataCell(Text(t.categoryName ?? '')),
+                        DataCell(Text(t.accountName ?? '')),
+                        DataCell(
+                          t.linksToPostedPayment && t.sourceId != null
+                              ? TextButton(
+                                  style: TextButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                    ),
+                                    minimumSize: Size.zero,
+                                    tapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
+                                  ),
+                                  onPressed: () =>
+                                      context.go('/payments/${t.sourceId}'),
+                                  child: Text(
+                                    t.sourceNumber ?? '#${t.sourceId}',
+                                  ),
+                                )
+                              : const Text('—'),
+                        ),
+                        DataCell(
+                          Text(
+                            '${t.type == TxType.income ? '+' : '-'}${formatMoney(t.amountMinor)}',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: t.type == TxType.income
+                                  ? Colors.green.shade700
+                                  : Colors.red.shade700,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-            ],
+                ],
+              ),
+            ),
           ),
         ),
       ),
@@ -198,11 +244,14 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
                               child: Text('No transactions this month.'),
                             )
                           : useTable
-                          ? Padding(
-                              padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-                              child: _dataTable(context, txs),
-                            )
-                          : _listView(context, txs),
+                          ? _dataTable(context, txs)
+                          : Padding(
+                              padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+                              child: BennetSurface(
+                                padding: EdgeInsets.zero,
+                                child: _listView(context, txs),
+                              ),
+                            ),
                     ),
                   ],
                 );

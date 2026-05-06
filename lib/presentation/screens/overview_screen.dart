@@ -4,11 +4,12 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../application/client_account_providers.dart';
-import '../../domain/client_accounts.dart';
 import '../../core/money.dart';
 import '../layout/responsive_content.dart';
+import '../theme/app_design_tokens.dart';
 import '../widgets/amount_text.dart';
 import '../widgets/app_scaffold.dart';
+import '../widgets/bennet_surface.dart';
 import '../widgets/metric_tile.dart';
 import '../widgets/page_header.dart';
 
@@ -31,7 +32,7 @@ class OverviewScreen extends ConsumerWidget {
       data: (m) => BennetScaffold(
         title: 'Overview',
         body: ListView(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(AppSpacing.pagePad),
           children: [
             PageHeader(
               title: 'Overview',
@@ -49,29 +50,29 @@ class OverviewScreen extends ConsumerWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
             Wrap(
-              spacing: 8,
-              runSpacing: 8,
+              spacing: 10,
+              runSpacing: 10,
               children: [
-                ActionChip(
-                  avatar: const Icon(Icons.request_quote_outlined, size: 18),
-                  label: const Text('Charges'),
+                _OverviewQuickLink(
+                  icon: Icons.request_quote_outlined,
+                  label: 'Charges',
                   onPressed: () => context.go('/charges'),
                 ),
-                ActionChip(
-                  avatar: const Icon(Icons.payments_outlined, size: 18),
-                  label: const Text('Payments'),
+                _OverviewQuickLink(
+                  icon: Icons.payments_outlined,
+                  label: 'Payments',
                   onPressed: () => context.go('/payments'),
                 ),
-                ActionChip(
-                  avatar: const Icon(Icons.description_outlined, size: 18),
-                  label: const Text('Statements'),
+                _OverviewQuickLink(
+                  icon: Icons.description_outlined,
+                  label: 'Statements',
                   onPressed: () => context.go('/statements'),
                 ),
-                ActionChip(
-                  avatar: const Icon(Icons.request_quote_outlined, size: 18),
-                  label: const Text('New charge'),
+                _OverviewQuickLink(
+                  icon: Icons.add_circle_outline,
+                  label: 'New charge',
                   onPressed: () => context.go('/charges/new'),
                 ),
               ],
@@ -80,43 +81,51 @@ class OverviewScreen extends ConsumerWidget {
             LayoutBuilder(
               builder: (context, c) {
                 final w = c.maxWidth;
-                final cross =
-                    w >= Breakpoints.expanded ? 3 : (w >= Breakpoints.compact ? 2 : 1);
+                final cross = w >= Breakpoints.expanded
+                    ? 3
+                    : (w >= Breakpoints.compact ? 2 : 1);
+                final aspectRatio = switch (cross) {
+                  1 => 1.22,
+                  2 => 1.36,
+                  _ => 1.4,
+                };
                 return GridView.count(
                   crossAxisCount: cross,
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
                   crossAxisSpacing: 12,
                   mainAxisSpacing: 12,
-                  childAspectRatio: 1.6,
+                  childAspectRatio: aspectRatio,
                   children: [
                     MetricTile(
                       title: 'Total balance',
                       value: formatMoney(m.totalBalanceMinor),
                       icon: Icons.account_balance_wallet_outlined,
+                      accent: AppSemanticColors.credits,
                     ),
                     MetricTile(
                       title: 'Open charges',
                       value: formatMoney(m.openChargesTotalMinor),
                       icon: Icons.request_quote_outlined,
-                      accent: Colors.amber.shade800,
+                      accent: AppSemanticColors.attention,
                     ),
                     MetricTile(
                       title: 'Overdue items',
                       value: '${m.overdueOpenChargeCount}',
                       icon: Icons.schedule_outlined,
-                      accent: Colors.deepOrange.shade700,
+                      accent: AppSemanticColors.overdue,
                     ),
                     MetricTile(
                       title: 'Payments (30 days)',
                       value: formatMoney(m.postedPaymentsLast30DaysMinor),
                       icon: Icons.trending_up,
-                      accent: Colors.green.shade800,
+                      accent: AppSemanticColors.credits,
                     ),
                     MetricTile(
                       title: 'Active clients',
                       value: '${m.activeClientCount}',
                       icon: Icons.groups_outlined,
+                      accent: AppSemanticColors.info,
                     ),
                   ],
                 );
@@ -131,10 +140,63 @@ class OverviewScreen extends ConsumerWidget {
   }
 }
 
+/// Compact Overview shortcut aligned with refreshed [ChipTheme].
+class _OverviewQuickLink extends StatelessWidget {
+  const _OverviewQuickLink({
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return ActionChip(
+      avatar: Icon(icon, size: 17, color: scheme.primary),
+      label: Text(label),
+      visualDensity: VisualDensity.compact,
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      labelPadding: const EdgeInsets.symmetric(horizontal: 4),
+      onPressed: onPressed,
+    );
+  }
+}
+
+class _ActivityLeading extends StatelessWidget {
+  const _ActivityLeading({required this.icon, required this.accent});
+
+  final IconData icon;
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(
+        color: accent.withValues(
+          alpha: Theme.of(context).brightness == Brightness.dark ? 0.22 : 0.14,
+        ),
+        borderRadius: BorderRadius.circular(AppRadii.control),
+        border: Border.all(color: accent.withValues(alpha: 0.2)),
+      ),
+      alignment: Alignment.center,
+      child: Icon(icon, size: 20, color: accent),
+    );
+  }
+}
+
 class _OverviewActivitySection extends ConsumerWidget {
   const _OverviewActivitySection();
 
   static final _df = DateFormat.yMMMd();
+
+  /// ASCII separators avoid Windows / encoding quirks in middot-heavy strings.
+  static String sep(String a, String b) => '$a - $b';
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -154,34 +216,46 @@ class _OverviewActivitySection extends ConsumerWidget {
         data: (clients) => chargesAsync.when(
           loading: () => const SizedBox.shrink(),
           error: (err, _) => const SizedBox.shrink(),
-          data: (charges) {
+          data: (regRows) {
             final clientName = {for (final c in clients) c.id: c.displayName};
 
             final recent = payments.take(5).toList();
-            final openCharges = charges
-                .where((c) => c.status == ChargeStatus.open)
-                .toList()
+            final openCharges = regRows.where((r) => r.openMinor > 0).toList()
               ..sort((a, b) {
-                final ad = a.dueDate;
-                final bd = b.dueDate;
-                if (ad == null && bd == null) return b.issuedAt.compareTo(a.issuedAt);
+                final ad = a.charge.dueDate;
+                final bd = b.charge.dueDate;
+                if (ad == null && bd == null) {
+                  return b.charge.issuedAt.compareTo(a.charge.issuedAt);
+                }
                 if (ad == null) return 1;
                 if (bd == null) return -1;
-                final c = ad.compareTo(bd);
-                return c != 0 ? c : b.issuedAt.compareTo(a.issuedAt);
+                final c0 = ad.compareTo(bd);
+                return c0 != 0 ? c0 : b.charge.issuedAt.compareTo(a.charge.issuedAt);
               });
             final topOpen = openCharges.take(5).toList();
 
             final theme = Theme.of(context);
+            final scheme = theme.colorScheme;
+            final sectionStyle = theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w800,
+              color: scheme.onSurface,
+            );
 
             return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(
-                  'Recent payments',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(
+                      child: Text('Recent payments', style: sectionStyle),
+                    ),
+                    if (recent.isNotEmpty)
+                      TextButton(
+                        onPressed: () => context.go('/payments'),
+                        child: const Text('See all'),
+                      ),
+                  ],
                 ),
                 const SizedBox(height: 8),
                 if (recent.isEmpty)
@@ -190,18 +264,23 @@ class _OverviewActivitySection extends ConsumerWidget {
                     child: Text(
                       'No payments recorded yet.',
                       style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
+                        color: scheme.onSurfaceVariant,
                       ),
                     ),
                   )
                 else ...[
-                  Card(
-                    margin: EdgeInsets.zero,
+                  BennetSurface(
+                    padding: EdgeInsets.zero,
+                    accent: AppSemanticColors.credits,
                     child: Column(
                       children: [
                         for (var i = 0; i < recent.length; i++) ...[
                           if (i > 0) const Divider(height: 1),
                           ListTile(
+                            leading: const _ActivityLeading(
+                              icon: Icons.payments_outlined,
+                              accent: AppSemanticColors.credits,
+                            ),
                             title: Text(
                               clientName[recent[i].clientId] ??
                                   'Client #${recent[i].clientId}',
@@ -209,9 +288,13 @@ class _OverviewActivitySection extends ConsumerWidget {
                               overflow: TextOverflow.ellipsis,
                             ),
                             subtitle: Text(
-                              '${_df.format(recent[i].receivedAt)} · '
-                              '${recent[i].method.name} · '
-                              '#${recent[i].receiptNumber ?? recent[i].id}',
+                              sep(
+                                sep(
+                                  _df.format(recent[i].receivedAt),
+                                  recent[i].method.name,
+                                ),
+                                '#${recent[i].receiptNumber ?? recent[i].id}',
+                              ),
                             ),
                             trailing: AmountText(recent[i].amountMinor),
                             onTap: () =>
@@ -221,60 +304,63 @@ class _OverviewActivitySection extends ConsumerWidget {
                       ],
                     ),
                   ),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton(
-                      onPressed: () => context.go('/payments'),
-                      child: const Text('See all payments'),
-                    ),
-                  ),
+                  const SizedBox(height: 24),
                 ],
-                const SizedBox(height: 8),
-                Text(
-                  'Open charges',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(child: Text('Open charges', style: sectionStyle)),
+                    if (topOpen.isNotEmpty)
+                      TextButton(
+                        onPressed: () => context.go('/charges'),
+                        child: const Text('See all'),
+                      ),
+                  ],
                 ),
                 const SizedBox(height: 8),
                 if (topOpen.isEmpty)
                   Text(
                     'No open charges.',
                     style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
+                      color: scheme.onSurfaceVariant,
                     ),
                   )
                 else ...[
-                  Card(
-                    margin: EdgeInsets.zero,
+                  BennetSurface(
+                    padding: EdgeInsets.zero,
+                    accent: AppSemanticColors.attention,
                     child: Column(
                       children: [
                         for (var i = 0; i < topOpen.length; i++) ...[
                           if (i > 0) const Divider(height: 1),
                           ListTile(
+                            leading: const _ActivityLeading(
+                              icon: Icons.request_quote_outlined,
+                              accent: AppSemanticColors.attention,
+                            ),
                             title: Text(
-                              topOpen[i].description ?? 'Charge',
+                              topOpen[i].charge.description ?? 'Charge',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
-                            subtitle: Text(
-                              '${clientName[topOpen[i].clientId] ?? 'Client #${topOpen[i].clientId}'} · '
-                              '${_df.format(topOpen[i].issuedAt)}'
-                              '${topOpen[i].dueDate != null ? ' · Due ${_df.format(topOpen[i].dueDate!)}' : ''}',
-                            ),
-                            trailing: AmountText(topOpen[i].amountMinor),
+                            subtitle: Text(() {
+                              final clientLine = topOpen[i].clientDisplayName;
+                              final issue =
+                                  _df.format(topOpen[i].charge.issuedAt);
+                              final due = topOpen[i].charge.dueDate != null
+                                  ? 'Due ${_df.format(topOpen[i].charge.dueDate!)}'
+                                  : null;
+                              if (due == null) {
+                                return sep(clientLine, issue);
+                              }
+                              return sep(sep(clientLine, issue), due);
+                            }()),
+                            trailing: AmountText(topOpen[i].openMinor),
                             onTap: () =>
-                                context.go('/clients/${topOpen[i].clientId}'),
+                                context.go('/charges/${topOpen[i].charge.id}'),
                           ),
                         ],
                       ],
-                    ),
-                  ),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton(
-                      onPressed: () => context.go('/charges'),
-                      child: const Text('See all charges'),
                     ),
                   ),
                 ],

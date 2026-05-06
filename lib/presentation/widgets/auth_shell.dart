@@ -2,6 +2,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../theme/app_design_tokens.dart';
+
 /// Shared centered layout for login / signup (narrow column on wide web viewports).
 class AuthShell extends StatelessWidget {
   const AuthShell({
@@ -27,6 +29,7 @@ class AuthShell extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
 
     return Scaffold(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
@@ -47,17 +50,37 @@ class AuthShell extends StatelessWidget {
                       mainAxisAlignment: MainAxisAlignment.center,
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Icon(
-                          Icons.account_balance_wallet_outlined,
-                          size: 48,
-                          color: scheme.primary,
+                        Center(
+                          child: Container(
+                            width: 44,
+                            height: 44,
+                            decoration: BoxDecoration(
+                              color: scheme.primary.withValues(alpha: 0.14),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: scheme.primary.withValues(alpha: 0.22),
+                              ),
+                            ),
+                            alignment: Alignment.center,
+                            child: Text(
+                              'B',
+                              style: TextStyle(
+                                color: scheme.primary,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 20,
+                                height: 1,
+                              ),
+                            ),
+                          ),
                         ),
                         const SizedBox(height: 16),
                         Text(
                           'Bennet',
                           textAlign: TextAlign.center,
                           style: textTheme.headlineMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.w800,
+                            color: scheme.onSurface,
+                            letterSpacing: -0.35,
                           ),
                         ),
                         const SizedBox(height: 8),
@@ -65,7 +88,8 @@ class AuthShell extends StatelessWidget {
                           headline,
                           textAlign: TextAlign.center,
                           style: textTheme.headlineSmall?.copyWith(
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.w700,
+                            color: scheme.onSurface,
                           ),
                         ),
                         const SizedBox(height: 4),
@@ -74,6 +98,7 @@ class AuthShell extends StatelessWidget {
                           textAlign: TextAlign.center,
                           style: textTheme.titleMedium?.copyWith(
                             color: scheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
                         const SizedBox(height: 28),
@@ -107,12 +132,16 @@ class AuthShell extends StatelessWidget {
   /// Card wrapper matching Bennet auth styling.
   static Widget card(BuildContext context, {required List<Widget> children}) {
     final scheme = Theme.of(context).colorScheme;
-    return Card(
-      elevation: 0,
-      color: scheme.surfaceContainerHighest.withValues(alpha: 0.65),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.5)),
+    final theme = Theme.of(context);
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        borderRadius: BorderRadius.circular(AppRadii.authCard),
+        border: Border.all(
+          color: scheme.outlineVariant.withValues(alpha: 0.82),
+        ),
+        boxShadow: AppShadows.cardElevated(theme.brightness),
       ),
       child: Padding(
         padding: const EdgeInsets.all(24),

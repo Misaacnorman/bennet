@@ -13,6 +13,7 @@ class AmountText extends StatelessWidget {
 
   final int minor;
   final TextStyle? style;
+
   /// When true, negative amounts render as informational (credit).
   final bool positiveIsCredit;
 

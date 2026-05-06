@@ -117,6 +117,10 @@ ORDER BY t.occurred_at ASC, t.id ASC
           : null,
       categoryName: r['category_name'] as String?,
       accountName: r['account_name'] as String?,
+      clientId: r['client_id'] as int?,
+      sourceType: r['source_type'] as String?,
+      sourceId: r['source_id'] as int?,
+      sourceNumber: r['source_number'] as String?,
     );
   }
 
@@ -148,6 +152,10 @@ LIMIT 1
     String? notes,
     String? paymentMethod,
     String? counterparty,
+    int? clientId,
+    String? sourceType,
+    int? sourceId,
+    String? sourceNumber,
   }) {
     return _db.insert('transactions', {
       'book_id': bookId,
@@ -160,7 +168,34 @@ LIMIT 1
       'payment_method': paymentMethod,
       'counterparty': counterparty,
       'cleared_at': null,
+      'client_id': clientId,
+      'source_type': sourceType,
+      'source_id': sourceId,
+      'source_number': sourceNumber,
     });
+  }
+
+  @override
+  Future<void> setTransactionTraceability({
+    required int transactionId,
+    int? clientId,
+    String? sourceType,
+    int? sourceId,
+    String? sourceNumber,
+  }) async {
+    final row = <String, Object?>{
+      'client_id': ?clientId,
+      'source_type': ?sourceType,
+      'source_id': ?sourceId,
+      'source_number': ?sourceNumber,
+    };
+    if (row.isEmpty) return;
+    await _db.update(
+      'transactions',
+      row,
+      where: 'id = ?',
+      whereArgs: [transactionId],
+    );
   }
 
   @override

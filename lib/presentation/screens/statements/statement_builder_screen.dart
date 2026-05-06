@@ -15,6 +15,7 @@ import '../../../services/statement_pdf_service.dart';
 import '../../layout/responsive_content.dart';
 import '../../widgets/app_scaffold.dart';
 import '../../widgets/amount_text.dart';
+import '../../widgets/bennet_surface.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/page_header.dart';
 import '../../widgets/responsive_data_surface.dart';
@@ -96,6 +97,8 @@ class _StatementBuilderScreenState
           to: _to,
         )).future,
       );
+      final ledger = await ref.read(ledgerRepositoryProvider.future);
+      final footer = await ledger.getSetting('document_secondary_footer');
       final results = await Future.wait<Object?>([
         repo.saveStatement(_input),
         ref.read(businessNameProvider.future),
@@ -120,6 +123,7 @@ class _StatementBuilderScreenState
         businessName: businessName,
         statementNumber: savedStmt?.statementNumber,
         issuedAt: savedStmt?.issuedAt,
+        footerSecondary: footer,
       );
       if (!mounted) return;
       final dir = await getTemporaryDirectory();
@@ -179,7 +183,7 @@ class _StatementBuilderScreenState
               title: 'Statement',
               subtitle: client == null
                   ? 'Client not found'
-                  : '${client.displayName} · ${client.clientCode}',
+                  : '${client.displayName} - ${client.clientCode}',
               actions: [
                 OutlinedButton.icon(
                   onPressed: () => context.go('/clients/${widget.clientId}'),
@@ -197,8 +201,8 @@ class _StatementBuilderScreenState
             ),
           ),
           const SizedBox(height: 16),
-          Card(
-            margin: EdgeInsets.zero,
+          BennetSurface(
+            padding: EdgeInsets.zero,
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 4),
               child: Row(
@@ -247,7 +251,7 @@ class _StatementBuilderScreenState
                       child: Text(
                         'Preview',
                         style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
+                          fontWeight: FontWeight.w800,
                         ),
                       ),
                     ),
@@ -260,52 +264,49 @@ class _StatementBuilderScreenState
                   ],
                 ),
                 const SizedBox(height: 8),
-                Card(
-                  margin: EdgeInsets.zero,
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Opening',
-                                style: theme.textTheme.labelMedium?.copyWith(
-                                  color: theme.colorScheme.onSurfaceVariant,
-                                ),
+                BennetSurface(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Opening',
+                              style: theme.textTheme.labelMedium?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
                               ),
-                              Text(
-                                formatMoney(p.openingBalanceMinor),
-                                style: theme.textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.w600,
-                                ),
+                            ),
+                            Text(
+                              formatMoney(p.openingBalanceMinor),
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w600,
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Closing',
-                                style: theme.textTheme.labelMedium?.copyWith(
-                                  color: theme.colorScheme.onSurfaceVariant,
-                                ),
+                      ),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Closing',
+                              style: theme.textTheme.labelMedium?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
                               ),
-                              Text(
-                                formatMoney(p.closingBalanceMinor),
-                                style: theme.textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.w600,
-                                ),
+                            ),
+                            Text(
+                              formatMoney(p.closingBalanceMinor),
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w600,
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -335,9 +336,7 @@ class _StatementBuilderScreenState
     StatementPreview p,
     DateFormat df,
   ) {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+    return BennetDataSurface(
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: DataTable(
@@ -357,7 +356,7 @@ class _StatementBuilderScreenState
                       width: 280,
                       child: Text(
                         line.detail != null && line.detail!.trim().isNotEmpty
-                            ? '${line.label} — ${line.detail}'
+                            ? '${line.label} - ${line.detail}'
                             : line.label,
                         softWrap: true,
                       ),
@@ -381,29 +380,29 @@ class _StatementBuilderScreenState
     return Column(
       children: [
         for (final line in p.lines)
-          Card(
-            margin: const EdgeInsets.only(bottom: 8),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: ListTile(
-              title: Text(line.label),
-              subtitle: Text(
-                '${df.format(line.occurredAt)}'
-                '${line.detail != null && line.detail!.trim().isNotEmpty ? '\n${line.detail}' : ''}',
-              ),
-              isThreeLine:
-                  line.detail != null && line.detail!.trim().isNotEmpty,
-              trailing: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  AmountText(line.deltaMinor),
-                  Text(
-                    formatMoney(line.runningBalanceMinor),
-                    style: Theme.of(context).textTheme.labelSmall,
-                  ),
-                ],
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: BennetSurface(
+              padding: EdgeInsets.zero,
+              child: ListTile(
+                title: Text(line.label),
+                subtitle: Text(
+                  '${df.format(line.occurredAt)}'
+                  '${line.detail != null && line.detail!.trim().isNotEmpty ? '\n${line.detail}' : ''}',
+                ),
+                isThreeLine:
+                    line.detail != null && line.detail!.trim().isNotEmpty,
+                trailing: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    AmountText(line.deltaMinor),
+                    Text(
+                      formatMoney(line.runningBalanceMinor),
+                      style: Theme.of(context).textTheme.labelSmall,
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

@@ -13,6 +13,7 @@ import '../../application/providers.dart';
 import '../../core/money.dart';
 import '../layout/responsive_content.dart';
 import '../widgets/app_scaffold.dart';
+import '../widgets/bennet_surface.dart';
 
 class TaxExportScreen extends ConsumerStatefulWidget {
   const TaxExportScreen({super.key});
@@ -193,37 +194,54 @@ class _TaxExportScreenState extends ConsumerState<TaxExportScreen> {
         body: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('Date range'),
-              subtitle: Text(
-                '${DateFormat.yMMMd().format(_range.start)} – ${DateFormat.yMMMd().format(_range.end)}',
-              ),
-              trailing: const Icon(Icons.date_range),
-              onTap: _pickRange,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Exports category totals for the selected range for your records or accountant. This does not file taxes.',
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-            const SizedBox(height: 24),
-            Align(
-              alignment: Alignment.centerLeft,
+            BennetSurface(
+              padding: const EdgeInsets.all(4),
               child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  FilledButton.icon(
-                    onPressed: () => _exportCsv(book.id),
-                    icon: const Icon(Icons.table_chart_outlined),
-                    label: const Text('Export CSV'),
+                  ListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                    title: const Text('Date range'),
+                    subtitle: Text(
+                      '${DateFormat.yMMMd().format(_range.start)} - ${DateFormat.yMMMd().format(_range.end)}',
+                    ),
+                    trailing: const Icon(Icons.date_range),
+                    onTap: _pickRange,
                   ),
-                  const SizedBox(height: 12),
-                  OutlinedButton.icon(
-                    onPressed: () => _exportPdf(book.id),
-                    icon: const Icon(Icons.picture_as_pdf_outlined),
-                    label: const Text('Export PDF summary'),
+                  const Divider(height: 1),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Exports category totals for the selected range for your records or accountant. This does not file taxes.',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Income totals include every posted ledger '
+                          'income line—including deposits created when '
+                          'client payments sync to the ledger.',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color:
+                                    Theme.of(context).colorScheme.onSurfaceVariant,
+                              ),
+                        ),
+                        const SizedBox(height: 20),
+                        FilledButton.icon(
+                          onPressed: () => _exportCsv(book.id),
+                          icon: const Icon(Icons.table_chart_outlined),
+                          label: const Text('Export CSV'),
+                        ),
+                        const SizedBox(height: 12),
+                        OutlinedButton.icon(
+                          onPressed: () => _exportPdf(book.id),
+                          icon: const Icon(Icons.picture_as_pdf_outlined),
+                          label: const Text('Export PDF summary'),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),

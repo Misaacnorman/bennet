@@ -7,6 +7,7 @@ import '../../../core/money.dart';
 import '../../../domain/client_accounts.dart';
 import '../../layout/responsive_content.dart';
 import '../../widgets/app_scaffold.dart';
+import '../../widgets/bennet_surface.dart';
 
 class ChargeEditScreen extends ConsumerStatefulWidget {
   const ChargeEditScreen({super.key, required this.clientId});
@@ -54,9 +55,9 @@ class _ChargeEditScreenState extends ConsumerState<ChargeEditScreen> {
     final messenger = ScaffoldMessenger.of(context);
     final minor = parseMoneyInput(_amountCtrl.text);
     if (minor == null || minor <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter a valid amount.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Enter a valid amount.')));
       return;
     }
     final repo = await ref.clientAccounts;
@@ -67,8 +68,9 @@ class _ChargeEditScreenState extends ConsumerState<ChargeEditScreen> {
           amountMinor: minor,
           issuedAt: _issued,
           dueDate: _due,
-          description:
-              _descCtrl.text.trim().isEmpty ? null : _descCtrl.text.trim(),
+          description: _descCtrl.text.trim().isEmpty
+              ? null
+              : _descCtrl.text.trim(),
         ),
       );
       if (!mounted) return;
@@ -88,43 +90,47 @@ class _ChargeEditScreenState extends ConsumerState<ChargeEditScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          TextFormField(
-            controller: _amountCtrl,
-            decoration: const InputDecoration(
-              labelText: 'Amount',
-              border: OutlineInputBorder(),
-            ),
-            keyboardType: TextInputType.number,
-          ),
-          const SizedBox(height: 12),
-          TextFormField(
-            controller: _descCtrl,
-            decoration: const InputDecoration(
-              labelText: 'Description',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 12),
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('Issue date'),
-            subtitle: Text(_issued.toLocal().toString().split(' ').first),
-            trailing: IconButton(
-              tooltip: 'Pick date',
-              onPressed: _pickIssued,
-              icon: const Icon(Icons.calendar_today_outlined),
-            ),
-          ),
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('Due date'),
-            subtitle: Text(
-              _due == null ? 'None' : _due!.toLocal().toString().split(' ').first,
-            ),
-            trailing: IconButton(
-              tooltip: 'Pick due date',
-              onPressed: _pickDue,
-              icon: const Icon(Icons.event_outlined),
+          BennetSurface(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                TextFormField(
+                  controller: _amountCtrl,
+                  decoration: const InputDecoration(labelText: 'Amount'),
+                  keyboardType: TextInputType.number,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _descCtrl,
+                  decoration: const InputDecoration(labelText: 'Description'),
+                ),
+                const SizedBox(height: 8),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Issue date'),
+                  subtitle: Text(_issued.toLocal().toString().split(' ').first),
+                  trailing: IconButton(
+                    tooltip: 'Pick date',
+                    onPressed: _pickIssued,
+                    icon: const Icon(Icons.calendar_today_outlined),
+                  ),
+                ),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Due date'),
+                  subtitle: Text(
+                    _due == null
+                        ? 'None'
+                        : _due!.toLocal().toString().split(' ').first,
+                  ),
+                  trailing: IconButton(
+                    tooltip: 'Pick due date',
+                    onPressed: _pickDue,
+                    icon: const Icon(Icons.event_outlined),
+                  ),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 24),

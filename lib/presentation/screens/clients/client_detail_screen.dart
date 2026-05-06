@@ -6,8 +6,10 @@ import '../../../application/client_account_providers.dart';
 import '../../../application/providers.dart';
 import '../../../core/money.dart';
 import '../../../domain/client_accounts.dart';
+import '../../theme/app_design_tokens.dart';
 import '../../widgets/amount_text.dart';
 import '../../widgets/app_scaffold.dart';
+import '../../widgets/bennet_surface.dart';
 import '../../widgets/metric_tile.dart';
 import '../../widgets/page_header.dart';
 
@@ -17,8 +19,7 @@ class ClientDetailScreen extends ConsumerStatefulWidget {
   final int clientId;
 
   @override
-  ConsumerState<ClientDetailScreen> createState() =>
-      _ClientDetailScreenState();
+  ConsumerState<ClientDetailScreen> createState() => _ClientDetailScreenState();
 }
 
 class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen>
@@ -37,42 +38,43 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen>
     super.dispose();
   }
 
-  Future<void> _voidCharge(
-    BuildContext context,
-    ClientCharge charge,
-  ) async {
+  Future<void> _voidCharge(BuildContext context, ClientCharge charge) async {
     final reasonCtrl = TextEditingController();
     final ok = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Void charge'),
-        content: TextField(
-          controller: reasonCtrl,
-          decoration: const InputDecoration(
-            labelText: 'Reason',
-            border: OutlineInputBorder(),
+      builder: (ctx) {
+        final scheme = Theme.of(ctx).colorScheme;
+        return AlertDialog(
+          title: const Text('Void charge'),
+          content: TextField(
+            controller: reasonCtrl,
+            decoration: const InputDecoration(labelText: 'Reason'),
+            maxLines: 2,
+            autofocus: true,
           ),
-          maxLines: 2,
-          autofocus: true,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Void'),
-          ),
-        ],
-      ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: scheme.error,
+                foregroundColor: scheme.onError,
+              ),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Void'),
+            ),
+          ],
+        );
+      },
     );
     if (ok != true || !context.mounted) return;
     final reason = reasonCtrl.text.trim();
     if (reason.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Reason is required.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Reason is required.')));
       return;
     }
     try {
@@ -80,9 +82,9 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen>
       await repo.voidCharge(charge.id, reason);
       if (!context.mounted) return;
       invalidateClientAccounts(ref, clientId: widget.clientId);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Charge voided')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Charge voided')));
     } catch (e) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
@@ -96,35 +98,39 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen>
     final reasonCtrl = TextEditingController();
     final ok = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Reverse payment'),
-        content: TextField(
-          controller: reasonCtrl,
-          decoration: const InputDecoration(
-            labelText: 'Reason',
-            border: OutlineInputBorder(),
+      builder: (ctx) {
+        final scheme = Theme.of(ctx).colorScheme;
+        return AlertDialog(
+          title: const Text('Reverse payment'),
+          content: TextField(
+            controller: reasonCtrl,
+            decoration: const InputDecoration(labelText: 'Reason'),
+            maxLines: 2,
+            autofocus: true,
           ),
-          maxLines: 2,
-          autofocus: true,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Reverse'),
-          ),
-        ],
-      ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: scheme.error,
+                foregroundColor: scheme.onError,
+              ),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Reverse'),
+            ),
+          ],
+        );
+      },
     );
     if (ok != true || !context.mounted) return;
     final reason = reasonCtrl.text.trim();
     if (reason.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Reason is required.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Reason is required.')));
       return;
     }
     try {
@@ -134,9 +140,9 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen>
       invalidateClientAccounts(ref, clientId: widget.clientId);
       invalidateLedger(ref);
       ref.invalidate(paymentDetailProvider(payment.id));
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Payment reversed')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Payment reversed')));
     } catch (e) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
@@ -185,10 +191,7 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen>
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: amountCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Amount',
-                    border: OutlineInputBorder(),
-                  ),
+                  decoration: const InputDecoration(labelText: 'Amount'),
                   keyboardType: TextInputType.number,
                 ),
                 const SizedBox(height: 12),
@@ -210,10 +213,7 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen>
                 ),
                 TextFormField(
                   controller: reasonCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Reason',
-                    border: OutlineInputBorder(),
-                  ),
+                  decoration: const InputDecoration(labelText: 'Reason'),
                   maxLines: 2,
                 ),
               ],
@@ -235,9 +235,9 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen>
     if (ok != true || !context.mounted) return;
     final minor = parseMoneyInput(amountCtrl.text);
     if (minor == null || minor <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter a valid amount.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Enter a valid amount.')));
       return;
     }
     try {
@@ -248,16 +248,17 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen>
           kind: kind,
           amountMinor: minor,
           effectiveAt: effective,
-          reason:
-              reasonCtrl.text.trim().isEmpty ? null : reasonCtrl.text.trim(),
+          reason: reasonCtrl.text.trim().isEmpty
+              ? null
+              : reasonCtrl.text.trim(),
         ),
       );
       if (!context.mounted) return;
       invalidateClientAccounts(ref, clientId: widget.clientId);
       ref.invalidate(statementPreviewProvider);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Adjustment saved')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Adjustment saved')));
     } catch (e) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
@@ -289,6 +290,51 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen>
         return BennetScaffold(
           title: client.displayName,
           actions: [
+            PopupMenuButton<String>(
+              tooltip: 'Client actions',
+              onSelected: (v) async {
+                if (!context.mounted) return;
+                final repo = await ref.clientAccounts;
+                try {
+                  if (v == 'archive') {
+                    await repo.archiveClient(cid);
+                  } else if (v == 'restore') {
+                    await repo.updateClient(
+                      UpdateClientInput(
+                        id: cid,
+                        status: ClientStatus.active,
+                      ),
+                    );
+                  }
+                  if (!context.mounted) return;
+                  invalidateClientAccounts(ref, clientId: cid);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(v == 'archive'
+                          ? 'Archived'
+                          : 'Restored to active'),
+                    ),
+                  );
+                } catch (e) {
+                  if (!context.mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('$e')),
+                  );
+                }
+              },
+              itemBuilder: (ctx) => [
+                if (client.status != ClientStatus.archived)
+                  const PopupMenuItem(
+                    value: 'archive',
+                    child: Text('Archive client'),
+                  ),
+                if (client.status == ClientStatus.archived)
+                  const PopupMenuItem(
+                    value: 'restore',
+                    child: Text('Restore client'),
+                  ),
+              ],
+            ),
             IconButton(
               tooltip: 'Edit',
               onPressed: () => context.go('/clients/$cid/edit'),
@@ -378,11 +424,10 @@ class _SummaryTab extends StatelessWidget {
       children: [
         PageHeader(
           title: client.displayName,
-          subtitle: '${client.clientCode} · ${client.status.name}',
+          subtitle: '${client.clientCode} - ${client.status.name}',
           actions: [
             OutlinedButton.icon(
-              onPressed: () =>
-                  context.go('/clients/$clientId/statement'),
+              onPressed: () => context.go('/clients/$clientId/statement'),
               icon: const Icon(Icons.description_outlined),
               label: const Text('Statement'),
             ),
@@ -410,7 +455,7 @@ class _SummaryTab extends StatelessWidget {
                   MetricTile(
                     title: 'Outstanding charges',
                     value: formatMoney(s.outstandingChargesMinor),
-                    accent: Colors.amber.shade900,
+                    accent: AppSemanticColors.attention,
                   ),
                 ],
               );
@@ -420,9 +465,9 @@ class _SummaryTab extends StatelessWidget {
         const SizedBox(height: 24),
         Text(
           'Recent statements',
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w700,
-          ),
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
         ),
         statementsAsync.when(
           loading: () => const Padding(
@@ -432,26 +477,35 @@ class _SummaryTab extends StatelessWidget {
           error: (e, _) => Text('$e'),
           data: (list) {
             if (list.isEmpty) {
-              return ListTile(
-                title: Text(
-                  'No statements yet',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+              return BennetSurface(
+                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                child: ListTile(
+                  title: Text(
+                    'No statements yet',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
                   ),
                 ),
               );
             }
-            return Column(
-              children: [
-                for (final st in list.take(6))
-                  ListTile(
-                    title: Text('Statement #${st.statementNumber}'),
-                    subtitle: Text(
-                      '${st.fromDate.toLocal().toString().split(' ').first} → ${st.toDate.toLocal().toString().split(' ').first}',
+            final recent = list.take(6).toList();
+            return BennetSurface(
+              padding: EdgeInsets.zero,
+              child: Column(
+                children: [
+                  for (var i = 0; i < recent.length; i++) ...[
+                    if (i > 0) const Divider(height: 1),
+                    ListTile(
+                      title: Text('Statement #${recent[i].statementNumber}'),
+                      subtitle: Text(
+                        '${recent[i].fromDate.toLocal().toString().split(' ').first} - ${recent[i].toDate.toLocal().toString().split(' ').first}',
+                      ),
+                      trailing: AmountText(recent[i].closingBalanceMinor),
                     ),
-                    trailing: AmountText(st.closingBalanceMinor),
-                  ),
-              ],
+                  ],
+                ],
+              ),
             );
           },
         ),
@@ -479,25 +533,24 @@ class _TimelineTab extends ConsumerWidget {
         itemCount: lines.length,
         itemBuilder: (context, i) {
           final line = lines[i];
-          return Card(
-            margin: const EdgeInsets.only(bottom: 8),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: ListTile(
-              title: Text(line.title),
-              subtitle:
-                  line.subtitle != null ? Text(line.subtitle!) : null,
-              trailing: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  AmountText(line.deltaMinor),
-                  Text(
-                    formatMoney(line.balanceAfterMinor),
-                    style: Theme.of(context).textTheme.labelSmall,
-                  ),
-                ],
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: BennetSurface(
+              padding: EdgeInsets.zero,
+              child: ListTile(
+                title: Text(line.title),
+                subtitle: line.subtitle != null ? Text(line.subtitle!) : null,
+                trailing: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    AmountText(line.deltaMinor),
+                    Text(
+                      formatMoney(line.balanceAfterMinor),
+                      style: Theme.of(context).textTheme.labelSmall,
+                    ),
+                  ],
+                ),
               ),
             ),
           );
@@ -529,113 +582,162 @@ class _RegistersTab extends ConsumerWidget {
       children: [
         Text(
           'Charges',
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w700,
-          ),
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
         ),
         chargesAsync.when(
           loading: () => const LinearProgressIndicator(),
           error: (e, _) => Text('$e'),
-          data: (list) => Column(
-            children: [
-              for (final ch in list)
-                ListTile(
-                  title: Text(ch.description ?? 'Charge'),
-                  subtitle: Text(
-                    '${ch.status.name} · ${ch.issuedAt.toLocal().toString().split(' ').first}',
-                  ),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      AmountText(ch.amountMinor),
-                      if (ch.status == ChargeStatus.open)
-                        IconButton(
-                          tooltip: 'Void charge',
-                          icon: const Icon(Icons.block),
-                          onPressed: () => onVoidCharge(ch),
-                        ),
-                    ],
+          data: (list) {
+            if (list.isEmpty) {
+              return BennetSurface(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: ListTile(
+                  title: Text(
+                    'No charges',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
                   ),
                 ),
-            ],
-          ),
+              );
+            }
+            return BennetSurface(
+              padding: EdgeInsets.zero,
+              child: Column(
+                children: [
+                  for (var i = 0; i < list.length; i++) ...[
+                    if (i > 0) const Divider(height: 1),
+                    ListTile(
+                      title: Text(list[i].description ?? 'Charge'),
+                      subtitle: Text(
+                        '${list[i].status.name} - ${list[i].issuedAt.toLocal().toString().split(' ').first}',
+                      ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          AmountText(list[i].amountMinor),
+                          if (list[i].status == ChargeStatus.open)
+                            IconButton(
+                              tooltip: 'Void charge',
+                              icon: const Icon(Icons.block),
+                              onPressed: () => onVoidCharge(list[i]),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            );
+          },
         ),
         const SizedBox(height: 24),
         Text(
           'Payments',
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w700,
-          ),
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
         ),
         paymentsAsync.when(
           loading: () => const LinearProgressIndicator(),
           error: (e, _) => Text('$e'),
-          data: (list) => Column(
-            children: [
-              for (final p in list)
-                ListTile(
+          data: (list) {
+            if (list.isEmpty) {
+              return BennetSurface(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: ListTile(
                   title: Text(
-                    'Receipt #${p.receiptNumber ?? p.id} · ${p.method.name}',
+                    'No payments',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
                   ),
-                  subtitle: Text(p.reference ?? '—'),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      AmountText(p.amountMinor),
-                      if (p.status == PaymentStatus.posted)
-                        IconButton(
-                          tooltip: 'Reverse payment',
-                          icon: const Icon(Icons.undo),
-                          onPressed: () => onReversePayment(p),
-                        ),
-                      IconButton(
-                        tooltip: 'Details',
-                        icon: const Icon(Icons.chevron_right),
-                        onPressed: () =>
-                            context.go('/payments/${p.id}'),
-                      ),
-                    ],
-                  ),
-                  onTap: () => context.go('/payments/${p.id}'),
                 ),
-            ],
-          ),
+              );
+            }
+            return BennetSurface(
+              padding: EdgeInsets.zero,
+              child: Column(
+                children: [
+                  for (var i = 0; i < list.length; i++) ...[
+                    if (i > 0) const Divider(height: 1),
+                    ListTile(
+                      title: Text(
+                        'Receipt #${list[i].receiptNumber ?? list[i].id} - ${list[i].method.name}',
+                      ),
+                      subtitle: Text(list[i].reference ?? '—'),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          AmountText(list[i].amountMinor),
+                          if (list[i].status == PaymentStatus.posted)
+                            IconButton(
+                              tooltip: 'Reverse payment',
+                              icon: const Icon(Icons.undo),
+                              onPressed: () => onReversePayment(list[i]),
+                            ),
+                          IconButton(
+                            tooltip: 'Details',
+                            icon: const Icon(Icons.chevron_right),
+                            onPressed: () =>
+                                context.go('/payments/${list[i].id}'),
+                          ),
+                        ],
+                      ),
+                      onTap: () => context.go('/payments/${list[i].id}'),
+                    ),
+                  ],
+                ],
+              ),
+            );
+          },
         ),
         const SizedBox(height: 24),
         Text(
           'Adjustments',
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w700,
-          ),
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
         ),
         adjAsync.when(
           loading: () => const LinearProgressIndicator(),
           error: (e, _) => Text('$e'),
-          data: (list) => Column(
-            children: [
-              if (list.isEmpty)
-                ListTile(
+          data: (list) {
+            if (list.isEmpty) {
+              return BennetSurface(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: ListTile(
                   title: Text(
                     'None yet',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color:
-                          Theme.of(context).colorScheme.onSurfaceVariant,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
                   ),
-                )
-              else
-                for (final a in list)
-                  ListTile(
-                    title: Text(a.kind.name),
-                    subtitle: Text(a.reason ?? '—'),
-                    trailing: AmountText(
-                      a.kind == AdjustmentKind.increase
-                          ? a.amountMinor
-                          : -a.amountMinor,
+                ),
+              );
+            }
+            return BennetSurface(
+              padding: EdgeInsets.zero,
+              child: Column(
+                children: [
+                  for (var i = 0; i < list.length; i++) ...[
+                    if (i > 0) const Divider(height: 1),
+                    ListTile(
+                      title: Text(list[i].kind.name),
+                      subtitle: Text(list[i].reason ?? '—'),
+                      trailing: AmountText(
+                        list[i].kind == AdjustmentKind.increase
+                            ? list[i].amountMinor
+                            : -list[i].amountMinor,
+                      ),
                     ),
-                  ),
-            ],
-          ),
+                  ],
+                ],
+              ),
+            );
+          },
         ),
       ],
     );

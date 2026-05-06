@@ -7,6 +7,7 @@ import '../../../application/client_account_providers.dart';
 import '../../../core/money.dart';
 import '../../layout/responsive_content.dart';
 import '../../widgets/app_scaffold.dart';
+import '../../widgets/bennet_surface.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/page_header.dart';
 
@@ -66,19 +67,20 @@ class StatementHistoryScreen extends ConsumerWidget {
                   );
                 }
                 final s = list[i - 1];
-                return Card(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: ListTile(
-                    title: Text('Statement #${s.statementNumber}'),
-                    subtitle: Text(
-                      '${DateFormat.yMMMd().format(s.fromDate)} – '
-                      '${DateFormat.yMMMd().format(s.toDate)} · '
-                      '${names[s.clientId] ?? 'Client #${s.clientId}'}',
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: BennetSurface(
+                    padding: EdgeInsets.zero,
+                    child: ListTile(
+                      title: Text('Statement #${s.statementNumber}'),
+                      subtitle: Text(
+                        '${DateFormat.yMMMd().format(s.fromDate)} - '
+                        '${DateFormat.yMMMd().format(s.toDate)} - '
+                        '${names[s.clientId] ?? 'Client #${s.clientId}'}',
+                      ),
+                      trailing: Text(formatMoney(s.closingBalanceMinor)),
+                      onTap: () => context.go('/statements/${s.id}'),
                     ),
-                    trailing: Text(formatMoney(s.closingBalanceMinor)),
-                    onTap: () => context.go('/clients/${s.clientId}'),
                   ),
                 );
               },
